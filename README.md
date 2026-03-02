@@ -89,6 +89,8 @@ xcode-assistant-copilot-server
 
 The server starts on `http://127.0.0.1:8080` by default.
 
+**On the first run, a default configuration file is created at `~/.config/xcode-assistant-copilot-server/config.json` with MCP bridge support enabled.** You can edit this file to customize the server behavior. See [Configuration](#configuration) for details.
+
 **On the first run, if no stored OAuth token is found, the server will prompt you to authenticate via the GitHub device code flow:**
 
 ```
@@ -132,7 +134,7 @@ Under the provider's **Advanced** settings in Xcode:
 |---|---|---|
 | `--port <number>` | `8080` | Port to listen on (1–65535) |
 | `--log-level <level>` | `info` | Log verbosity: `none`, `error`, `warning`, `info`, `debug`, `all` |
-| `--config <path>` | — | Path to a JSON configuration file |
+| `--config <path>` | `~/.config/xcode-assistant-copilot-server/config.json` | Path to a JSON configuration file |
 | `--version` | — | Show the version. |
 | `-h, --help` | — | Show help information. |
 
@@ -147,12 +149,12 @@ xcode-assistant-copilot-server --port 9090 --log-level debug
 Run with a custom configuration file:
 
 ```sh
-xcode-assistant-copilot-server --config ./config.json
+xcode-assistant-copilot-server --config /path/to/custom-config.json
 ```
 
 ## Configuration
 
-The server can be configured via a JSON file passed with the `--config` flag. If no config file is provided, sensible defaults are used.
+On first launch, the server creates a default configuration file at `~/.config/xcode-assistant-copilot-server/config.json` with MCP bridge support enabled. You can edit this file directly to customize the server. Use the `--config` flag to load a configuration file from a different path instead.
 
 ### Configuration File Format
 

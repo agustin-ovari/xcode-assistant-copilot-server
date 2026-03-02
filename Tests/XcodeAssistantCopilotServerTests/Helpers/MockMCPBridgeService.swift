@@ -1,4 +1,5 @@
 @testable import XcodeAssistantCopilotServer
+import Foundation
 
 final class MockMCPBridgeService: MCPBridgeServiceProtocol, @unchecked Sendable {
     var tools: [MCPTool] = []
@@ -9,6 +10,7 @@ final class MockMCPBridgeService: MCPBridgeServiceProtocol, @unchecked Sendable 
     private(set) var calledTools: [(name: String, arguments: [String: AnyCodable])] = []
     var listToolsError: Error?
     var callToolError: Error?
+    var callToolDelay: Duration?
 
     func start() async throws {
         startCallCount += 1
@@ -26,6 +28,9 @@ final class MockMCPBridgeService: MCPBridgeServiceProtocol, @unchecked Sendable 
 
     func callTool(name: String, arguments: [String: AnyCodable]) async throws -> MCPToolResult {
         calledTools.append((name: name, arguments: arguments))
+        if let delay = callToolDelay {
+            try await Task.sleep(for: delay)
+        }
         if let error = callToolError { throw error }
         guard let result = callResults[name] else {
             throw MCPToolError.toolNotFound(name)

@@ -25,7 +25,10 @@ let package = Package(
             dependencies: [
                 .product(name: "Hummingbird", package: "hummingbird"),
             ],
-            path: "Sources/XcodeAssistantCopilotServer"
+            path: "Sources/XcodeAssistantCopilotServer",
+            resources: [
+                .copy("Resources/config.json"),
+            ]
         ),
         .executableTarget(
             name: "xcode-assistant-copilot-server",

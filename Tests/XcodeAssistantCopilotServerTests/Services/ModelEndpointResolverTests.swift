@@ -82,8 +82,11 @@ private let testCredentials = CopilotCredentials(
     let onlyResponses = CopilotModel(id: "gpt-5.1-codex", supportedEndpoints: ["/responses"])
     #expect(onlyResponses.supportsChatCompletions == false)
 
-    let noEndpoints = CopilotModel(id: "gpt-4")
-    #expect(noEndpoints.supportsChatCompletions == true)
+    let noEndpointsWithChatType = CopilotModel(id: "gpt-4", capabilities: CopilotModelCapabilities(type: "chat"))
+    #expect(noEndpointsWithChatType.supportsChatCompletions == true)
+
+    let noEndpointsNoCapabilities = CopilotModel(id: "unknown")
+    #expect(noEndpointsNoCapabilities.supportsChatCompletions == false)
 }
 
 @Test func copilotModelSupportedEndpointsDecodes() throws {
@@ -107,12 +110,22 @@ private let testCredentials = CopilotCredentials(
 
 @Test func copilotModelSupportedEndpointsDecodesWhenMissing() throws {
     let json = """
-    {"id":"gpt-4","name":"GPT 4","version":"gpt-4-0613"}
+    {"id":"gpt-4","name":"GPT 4","version":"gpt-4-0613","capabilities":{"type":"chat"}}
     """
     let model = try JSONDecoder().decode(CopilotModel.self, from: Data(json.utf8))
     #expect(model.supportedEndpoints == nil)
     #expect(model.requiresResponsesAPI == false)
     #expect(model.supportsChatCompletions == true)
+}
+
+@Test func copilotModelSupportedEndpointsDecodesWhenMissingWithoutCapabilities() throws {
+    let json = """
+    {"id":"gpt-4","name":"GPT 4","version":"gpt-4-0613"}
+    """
+    let model = try JSONDecoder().decode(CopilotModel.self, from: Data(json.utf8))
+    #expect(model.supportedEndpoints == nil)
+    #expect(model.requiresResponsesAPI == false)
+    #expect(model.supportsChatCompletions == false)
 }
 
 @Test func resolverReturnsChatCompletionsForUnknownModel() async {

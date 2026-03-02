@@ -208,7 +208,8 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
             MCPToolResultContent(type: mcpContent.type, text: mcpContent.text)
         }
 
-        let toolResult = MCPToolResult(content: content, isError: false)
+        let isError = result.raw["isError"]?.boolValue ?? false
+        let toolResult = MCPToolResult(content: content, isError: isError)
         logger.debug("MCP tool \(name) completed: \(toolResult.textContent.prefix(200))")
         return toolResult
     }
@@ -272,7 +273,7 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
             }
 
             stdinPipe?.fileHandleForWriting.write(writeData)
-            logger.debug("Sent MCP request #\(requestId): \(method)")
+            logger.debug("Sent MCP request #\(requestId): \(method) payload: \(messageData.prefix(1000))")
         }
     }
 

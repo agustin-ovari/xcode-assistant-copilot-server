@@ -208,3 +208,43 @@ import Testing
         return
     }
 }
+
+@Test func boolValueReturnsTrueForBoolTrue() {
+    let codable = AnyCodable(.bool(true))
+    #expect(codable.boolValue == true)
+}
+
+@Test func boolValueReturnsFalseForBoolFalse() {
+    let codable = AnyCodable(.bool(false))
+    #expect(codable.boolValue == false)
+}
+
+@Test func boolValueReturnsNilForString() {
+    let codable = AnyCodable(.string("true"))
+    #expect(codable.boolValue == nil)
+}
+
+@Test func boolValueReturnsNilForInt() {
+    let codable = AnyCodable(.int(1))
+    #expect(codable.boolValue == nil)
+}
+
+@Test func boolValueReturnsNilForNull() {
+    let codable = AnyCodable(.null)
+    #expect(codable.boolValue == nil)
+}
+
+@Test func boolValueReturnsNilForArray() {
+    let codable = AnyCodable(.array([]))
+    #expect(codable.boolValue == nil)
+}
+
+@Test func boolValueReturnsNilForDictionary() {
+    let codable = AnyCodable(.dictionary([:]))
+    #expect(codable.boolValue == nil)
+}
+
+@Test func boolValueReturnsNilForDouble() {
+    let codable = AnyCodable(.double(1.0))
+    #expect(codable.boolValue == nil)
+}

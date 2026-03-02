@@ -38,8 +38,9 @@ public struct ResponsesAPITranslator: Sendable {
                     }
                     for tc in toolCalls {
                         let callId = tc.id ?? UUID().uuidString
+                        let itemId = callId.hasPrefix("fc") ? callId : "fc_\(callId)"
                         inputItems.append(.functionCall(ResponsesFunctionCall(
-                            id: callId,
+                            id: itemId,
                             callId: callId,
                             name: tc.function.name,
                             arguments: tc.function.arguments
@@ -81,8 +82,7 @@ public struct ResponsesAPITranslator: Sendable {
             reasoning: reasoning
         )
         logger.debug("Translated request: model=\(result.model), input items=\(result.input.count), has instructions=\(result.instructions != nil), tools=\(result.tools?.count ?? 0), reasoning=\(result.reasoning?.effort ?? "nil"), stream=\(result.stream)")
-        if let encoded = try? JSONEncoder().encode(result),
-           let json = String(data: encoded, encoding: .utf8) {
+        if let encoded = try? JSONEncoder().encode(result), let json = String(data: encoded, encoding: .utf8) {
             logger.debug("Responses API request body: \(json)")
         }
         return result

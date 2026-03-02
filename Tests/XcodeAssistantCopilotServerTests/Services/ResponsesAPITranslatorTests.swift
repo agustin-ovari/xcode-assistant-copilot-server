@@ -114,6 +114,7 @@ import Foundation
     let encoded = try JSONEncoder().encode(result.input[1])
     let json = try JSONSerialization.jsonObject(with: encoded) as? [String: Any]
     #expect(json?["type"] as? String == "function_call")
+    #expect(json?["id"] as? String == "fc_call_123")
     #expect(json?["call_id"] as? String == "call_123")
     #expect(json?["name"] as? String == "get_weather")
     #expect(json?["arguments"] as? String == "{\"city\":\"NYC\"}")
@@ -149,6 +150,8 @@ import Foundation
     let callEncoded = try JSONEncoder().encode(result.input[1])
     let callDict = try JSONSerialization.jsonObject(with: callEncoded) as? [String: Any]
     #expect(callDict?["type"] as? String == "function_call")
+    #expect(callDict?["id"] as? String == "fc_call_456")
+    #expect(callDict?["call_id"] as? String == "call_456")
     #expect(callDict?["name"] as? String == "search")
 }
 
@@ -894,13 +897,37 @@ import Foundation
         with: JSONEncoder().encode(result.input[0])
     ) as? [String: Any]
     #expect(first?["name"] as? String == "tool_a")
+    #expect(first?["id"] as? String == "fc_call_1")
     #expect(first?["call_id"] as? String == "call_1")
 
     let second = try JSONSerialization.jsonObject(
         with: JSONEncoder().encode(result.input[1])
     ) as? [String: Any]
     #expect(second?["name"] as? String == "tool_b")
+    #expect(second?["id"] as? String == "fc_call_2")
     #expect(second?["call_id"] as? String == "call_2")
+}
+
+@Test func translateRequestKeepsIdWhenAlreadyFcPrefixed() throws {
+    let translator = ResponsesAPITranslator(logger: MockLogger())
+    let toolCall = ToolCall(
+        id: "fc_existing_id",
+        type: "function",
+        function: ToolCallFunction(name: "get_weather", arguments: "{}")
+    )
+    let request = CopilotChatRequest(
+        model: "gpt-5.1-codex",
+        messages: [
+            ChatCompletionMessage(role: .assistant, content: MessageContent.none, toolCalls: [toolCall])
+        ]
+    )
+
+    let result = translator.translateRequest(from: request)
+
+    let encoded = try JSONEncoder().encode(result.input[0])
+    let json = try JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    #expect(json?["id"] as? String == "fc_existing_id")
+    #expect(json?["call_id"] as? String == "fc_existing_id")
 }
 
 @Test func adaptStreamExtractsTextFromCompletedWhenNoDeltasStreamed() async throws {

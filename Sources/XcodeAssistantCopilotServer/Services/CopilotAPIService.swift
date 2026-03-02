@@ -86,7 +86,7 @@ public struct CopilotAPIService: CopilotAPIServiceProtocol {
 
         logger.info("Sending chat completion request for model: \(request.model) to \(credentials.apiEndpoint)/chat/completions")
         if let body = endpoint.body {
-            logger.info("Chat completions request body (\(body.count) bytes):\n\(body.prettyPrintedJSON)")
+            logger.debug("Chat completions request body (\(body.count) bytes):\n\(body.prettyPrintedJSON)")
         }
 
         let streamResponse: StreamResponse
@@ -119,7 +119,7 @@ public struct CopilotAPIService: CopilotAPIServiceProtocol {
 
         logger.info("Sending responses API request for model: \(request.model) to \(credentials.apiEndpoint)/responses")
         if let body = endpoint.body {
-            logger.info("Responses API request body (\(body.count) bytes):\n\(body.prettyPrintedJSON)")
+            logger.debug("Responses API request body (\(body.count) bytes):\n\(body.prettyPrintedJSON)")
         }
 
         let streamResponse: StreamResponse

@@ -2,21 +2,127 @@ import Testing
 import Foundation
 @testable import XcodeAssistantCopilotServer
 
-@Test func loadReturnsDefaultConfigWhenPathIsNil() throws {
-    let logger = MockLogger()
-    let loader = ConfigurationLoader(logger: logger)
+private func makeTempConfigDir() -> (directory: String, configPath: String, cleanup: () -> Void) {
+    let tempDir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("config-loader-test-\(UUID().uuidString)").path
+    let configPath = "\(tempDir)/config.json"
+    let cleanup = { _ = try? FileManager.default.removeItem(atPath: tempDir) }
+    return (tempDir, configPath, cleanup)
+}
+
+private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoader, MockLogger, () -> Void) {
+    let (dir, path, cleanup) = makeTempConfigDir()
+    let loader = ConfigurationLoader(logger: logger, defaultConfigDirectory: dir, defaultConfigPath: path)
+    return (loader, logger, cleanup)
+}
+
+@Test func loadCreatesDefaultConfigWhenPathIsNil() throws {
+    let (loader, logger, cleanup) = makeLoader()
+    defer { cleanup() }
+
     let config = try loader.load(from: nil)
-    #expect(config.mcpServers.isEmpty)
+    #expect(config.mcpServers.count == 1)
+    #expect(config.mcpServers["xcode"]?.type == .local)
+    #expect(config.mcpServers["xcode"]?.command == "xcrun")
+    #expect(config.mcpServers["xcode"]?.args == ["mcpbridge"])
     #expect(config.allowedCliTools.isEmpty)
     #expect(config.bodyLimitMiB == 4)
     #expect(config.excludedFilePatterns.isEmpty)
     #expect(config.reasoningEffort == .xhigh)
-    #expect(logger.infoMessages.contains(where: { $0.contains("defaults") }))
+    #expect(config.autoApprovePermissions.isApproved(.read) == true)
+    #expect(config.autoApprovePermissions.isApproved(.mcp) == true)
+    #expect(config.autoApprovePermissions.isApproved(.write) == false)
+    #expect(logger.infoMessages.contains(where: { $0.contains("Created default config") }))
 }
 
-@Test func loadReturnsDefaultConfigWhenFileDoesNotExist() throws {
+@Test func loadReadsExistingDefaultConfigWhenPathIsNil() throws {
+    let (dir, path, cleanup) = makeTempConfigDir()
+    defer { cleanup() }
+
+    try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+    let customJSON = """
+    {
+        "mcpServers": {},
+        "allowedCliTools": ["grep"],
+        "bodyLimitMiB": 8,
+        "excludedFilePatterns": [],
+        "reasoningEffort": "high",
+        "autoApprovePermissions": true
+    }
+    """
+    try customJSON.write(toFile: path, atomically: true, encoding: .utf8)
+
     let logger = MockLogger()
-    let loader = ConfigurationLoader(logger: logger)
+    let loader = ConfigurationLoader(logger: logger, defaultConfigDirectory: dir, defaultConfigPath: path)
+    let config = try loader.load(from: nil)
+
+    #expect(config.mcpServers.isEmpty)
+    #expect(config.allowedCliTools == ["grep"])
+    #expect(config.bodyLimitMiB == 8)
+    #expect(config.reasoningEffort == .high)
+    #expect(!logger.infoMessages.contains(where: { $0.contains("Created default config") }))
+}
+
+@Test func loadDoesNotOverwriteExistingDefaultConfig() throws {
+    let (dir, path, cleanup) = makeTempConfigDir()
+    defer { cleanup() }
+
+    try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+    let existingJSON = """
+    {
+        "mcpServers": {},
+        "allowedCliTools": [],
+        "bodyLimitMiB": 16,
+        "excludedFilePatterns": [],
+        "autoApprovePermissions": true
+    }
+    """
+    try existingJSON.write(toFile: path, atomically: true, encoding: .utf8)
+
+    let logger = MockLogger()
+    let loader = ConfigurationLoader(logger: logger, defaultConfigDirectory: dir, defaultConfigPath: path)
+    let config = try loader.load(from: nil)
+
+    #expect(config.bodyLimitMiB == 16)
+}
+
+@Test func defaultConfigJSONIsValidAndMatchesExpectedShape() throws {
+    let data = Data(ConfigurationLoader.defaultConfigJSON.utf8)
+    let config = try JSONDecoder().decode(ServerConfiguration.self, from: data)
+
+    #expect(config.mcpServers.count == 1)
+    #expect(config.mcpServers["xcode"]?.type == .local)
+    #expect(config.mcpServers["xcode"]?.command == "xcrun")
+    #expect(config.mcpServers["xcode"]?.args == ["mcpbridge"])
+    #expect(config.mcpServers["xcode"]?.isToolAllowed("anything") == true)
+    #expect(config.allowedCliTools.isEmpty)
+    #expect(config.bodyLimitMiB == 4)
+    #expect(config.excludedFilePatterns.isEmpty)
+    #expect(config.reasoningEffort == .xhigh)
+    #expect(config.autoApprovePermissions.isApproved(.read) == true)
+    #expect(config.autoApprovePermissions.isApproved(.mcp) == true)
+    #expect(config.autoApprovePermissions.isApproved(.write) == false)
+    #expect(config.autoApprovePermissions.isApproved(.shell) == false)
+}
+
+@Test func loadCreatesDefaultConfigDirectoryIfMissing() throws {
+    let (dir, path, cleanup) = makeTempConfigDir()
+    defer { cleanup() }
+
+    #expect(!FileManager.default.fileExists(atPath: dir))
+
+    let logger = MockLogger()
+    let loader = ConfigurationLoader(logger: logger, defaultConfigDirectory: dir, defaultConfigPath: path)
+    let _ = try loader.load(from: nil)
+
+    #expect(FileManager.default.fileExists(atPath: dir))
+    #expect(FileManager.default.fileExists(atPath: path))
+}
+
+@Test func loadReturnsDefaultConfigWhenExplicitPathDoesNotExist() throws {
+    let logger = MockLogger()
+    let (loader, _, cleanup) = makeLoader(logger: logger)
+    defer { cleanup() }
     let config = try loader.load(from: "/nonexistent/path/config.json")
     #expect(config.mcpServers.isEmpty)
     #expect(config.allowedCliTools.isEmpty)
@@ -614,7 +720,7 @@ import Foundation
     #expect(config.mcpServers["remote"]?.headers?["Authorization"] == "Bearer token123")
 }
 
-@Test func defaultConfigurationHasExpectedValues() {
+@Test func sharedConfigurationHasExpectedEmptyDefaults() {
     let config = ServerConfiguration.shared
     #expect(config.mcpServers.isEmpty)
     #expect(config.allowedCliTools.isEmpty)
@@ -732,13 +838,65 @@ import Foundation
 }
 
 @Test func loadHandlesRelativePath() throws {
-    let logger = MockLogger()
-    let loader = ConfigurationLoader(logger: logger)
+    let (loader, _, cleanup) = makeLoader()
+    defer { cleanup() }
 
     // A relative path that doesn't exist should return defaults
     let config = try loader.load(from: "nonexistent_relative_config.json")
     #expect(config.mcpServers.isEmpty)
     #expect(config.bodyLimitMiB == 4)
+}
+
+@Test func productionConfigPathIsUnderUserHome() {
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    #expect(ConfigurationLoader.productionConfigPath.hasPrefix(home))
+    #expect(ConfigurationLoader.productionConfigPath.hasSuffix("/config.json"))
+    #expect(ConfigurationLoader.productionConfigPath.contains(".config/xcode-assistant-copilot-server"))
+}
+
+@Test func productionConfigDirectoryIsUnderUserHome() {
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    #expect(ConfigurationLoader.productionConfigDirectory.hasPrefix(home))
+    #expect(ConfigurationLoader.productionConfigDirectory.hasSuffix("xcode-assistant-copilot-server"))
+}
+
+@Test func loadWithExplicitPathIgnoresDefaultConfigPath() throws {
+    let (dir, defaultPath, cleanup) = makeTempConfigDir()
+    defer { cleanup() }
+
+    // Create a default config that would be used if --config was nil
+    try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+    let defaultJSON = """
+    {
+        "mcpServers": {},
+        "allowedCliTools": [],
+        "bodyLimitMiB": 99,
+        "excludedFilePatterns": [],
+        "autoApprovePermissions": true
+    }
+    """
+    try defaultJSON.write(toFile: defaultPath, atomically: true, encoding: .utf8)
+
+    // Create a separate explicit config
+    let explicitPath = FileManager.default.temporaryDirectory
+        .appendingPathComponent("explicit-\(UUID().uuidString).json")
+    let explicitJSON = """
+    {
+        "mcpServers": {},
+        "allowedCliTools": [],
+        "bodyLimitMiB": 2,
+        "excludedFilePatterns": [],
+        "autoApprovePermissions": true
+    }
+    """
+    try explicitJSON.write(to: explicitPath, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: explicitPath) }
+
+    let logger = MockLogger()
+    let loader = ConfigurationLoader(logger: logger, defaultConfigDirectory: dir, defaultConfigPath: defaultPath)
+    let config = try loader.load(from: explicitPath.path)
+
+    #expect(config.bodyLimitMiB == 2)
 }
 
 @Test func loadParsesConfigWithEnvironmentInMCPServer() throws {

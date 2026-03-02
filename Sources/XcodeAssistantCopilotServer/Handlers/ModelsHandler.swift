@@ -44,7 +44,10 @@ public struct ModelsHandler: Sendable {
             )
         }
 
-        let modelObjects = models.map { model in
+        let usableModels = models.filter { $0.isUsableForChat }
+        logger.debug("Filtered \(models.count) model(s) to \(usableModels.count) chat-usable model(s)")
+
+        let modelObjects = usableModels.map { model in
             ModelObject(id: model.id)
         }
 

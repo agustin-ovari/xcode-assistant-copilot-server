@@ -48,8 +48,17 @@ public struct CopilotModel: Decodable, Sendable {
     }
 
     public var supportsChatCompletions: Bool {
-        guard let endpoints = supportedEndpoints else { return true }
+        guard let endpoints = supportedEndpoints else {
+            return capabilities?.type == "chat"
+        }
         return endpoints.contains("/chat/completions")
+    }
+
+    public var isUsableForChat: Bool {
+        guard let endpoints = supportedEndpoints else {
+            return capabilities?.type == "chat"
+        }
+        return endpoints.contains("/chat/completions") || endpoints.contains("/responses")
     }
 }
 

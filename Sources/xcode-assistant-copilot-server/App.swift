@@ -15,7 +15,7 @@ struct App: AsyncParsableCommand {
     @Option(name: .long, help: "Log verbosity: none, error, warning, info, debug, all")
     var logLevel: String = "info"
 
-    @Option(name: .long, help: "Path to JSON config file")
+    @Option(name: .long, help: "Path to JSON config file (default: ~/.config/xcode-assistant-copilot-server/config.json)")
     var config: String?
 
     mutating func run() async throws {

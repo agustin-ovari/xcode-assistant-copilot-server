@@ -23,28 +23,56 @@ public protocol ConfigurationLoaderProtocol: Sendable {
 
 public struct ConfigurationLoader: ConfigurationLoaderProtocol {
     private let logger: LoggerProtocol
+    private let defaultConfigDirectory: String
+    private let defaultConfigPath: String
+
+    static let productionConfigDirectory: String = {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return "\(home)/.config/xcode-assistant-copilot-server"
+    }()
+
+    static let productionConfigPath: String = {
+        "\(productionConfigDirectory)/config.json"
+    }()
+
+    static let defaultConfigJSON: String = {
+        guard let url = Bundle.module.url(forResource: "config", withExtension: "json"),
+              let contents = try? String(contentsOf: url, encoding: .utf8) else {
+            fatalError("Bundled config.json resource not found in Bundle.module")
+        }
+        return contents
+    }()
 
     public init(logger: LoggerProtocol) {
         self.logger = logger
+        self.defaultConfigDirectory = Self.productionConfigDirectory
+        self.defaultConfigPath = Self.productionConfigPath
+    }
+
+    init(logger: LoggerProtocol, defaultConfigDirectory: String, defaultConfigPath: String) {
+        self.logger = logger
+        self.defaultConfigDirectory = defaultConfigDirectory
+        self.defaultConfigPath = defaultConfigPath
     }
 
     public func load(from path: String?) throws -> ServerConfiguration {
-        guard let path else {
-            logger.info("No config file specified, using defaults")
-            return .shared
+        let configPath: String
+
+        if let path {
+            configPath = resolveAbsolutePath(path)
+            guard FileManager.default.fileExists(atPath: configPath) else {
+                logger.warn("No config file at \(configPath), using defaults")
+                return .shared
+            }
+            logger.info("Reading config from \(configPath)")
+        } else {
+            configPath = defaultConfigPath
+            createDefaultConfigIfNeeded()
+            logger.info("Reading config from \(configPath)")
         }
 
-        let absolutePath = resolveAbsolutePath(path)
-
-        guard FileManager.default.fileExists(atPath: absolutePath) else {
-            logger.warn("No config file at \(absolutePath), using defaults")
-            return .shared
-        }
-
-        logger.info("Reading config from \(absolutePath)")
-
-        guard let data = FileManager.default.contents(atPath: absolutePath) else {
-            throw ConfigurationLoaderError.fileNotFound(absolutePath)
+        guard let data = FileManager.default.contents(atPath: configPath) else {
+            throw ConfigurationLoaderError.fileNotFound(configPath)
         }
 
         let configuration: ServerConfiguration
@@ -59,12 +87,38 @@ public struct ConfigurationLoader: ConfigurationLoaderProtocol {
 
         try validate(configuration)
 
-        let configDir = URL(fileURLWithPath: absolutePath).deletingLastPathComponent().path
+        let configDir = URL(fileURLWithPath: configPath).deletingLastPathComponent().path
         let resolved = resolveServerPaths(in: configuration, configDir: configDir)
 
         logConfigurationSummary(resolved)
 
         return resolved
+    }
+
+    func createDefaultConfigIfNeeded() {
+        let fileManager = FileManager.default
+
+        if fileManager.fileExists(atPath: defaultConfigPath) {
+            return
+        }
+
+        do {
+            if !fileManager.fileExists(atPath: defaultConfigDirectory) {
+                try fileManager.createDirectory(
+                    atPath: defaultConfigDirectory,
+                    withIntermediateDirectories: true
+                )
+            }
+
+            try Self.defaultConfigJSON.write(
+                toFile: defaultConfigPath,
+                atomically: true,
+                encoding: .utf8
+            )
+            logger.info("Created default config at \(defaultConfigPath)")
+        } catch {
+            logger.warn("Failed to create default config: \(error)")
+        }
     }
 
     private func resolveAbsolutePath(_ path: String) -> String {

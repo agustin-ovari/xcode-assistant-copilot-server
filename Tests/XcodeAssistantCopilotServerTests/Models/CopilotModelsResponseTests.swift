@@ -416,3 +416,45 @@ import Testing
     #expect(supports.vision == true)
     #expect(supports.reasoningEffort == false)
 }
+
+@Test func isUsableForChatReturnsTrueForChatCompletionsEndpoint() {
+    let model = CopilotModel(id: "gpt-4o", supportedEndpoints: ["/chat/completions"])
+    #expect(model.isUsableForChat == true)
+}
+
+@Test func isUsableForChatReturnsTrueForResponsesEndpoint() {
+    let model = CopilotModel(id: "codex-model", supportedEndpoints: ["/responses"])
+    #expect(model.isUsableForChat == true)
+}
+
+@Test func isUsableForChatReturnsTrueForBothEndpoints() {
+    let model = CopilotModel(id: "gpt-4o", supportedEndpoints: ["/chat/completions", "/responses"])
+    #expect(model.isUsableForChat == true)
+}
+
+@Test func isUsableForChatReturnsFalseForEmbeddingsOnly() {
+    let model = CopilotModel(id: "text-embedding-ada-002", supportedEndpoints: ["/embeddings"])
+    #expect(model.isUsableForChat == false)
+}
+
+@Test func isUsableForChatReturnsFalseForEmptyEndpoints() {
+    let model = CopilotModel(id: "empty-model", supportedEndpoints: [])
+    #expect(model.isUsableForChat == false)
+}
+
+@Test func isUsableForChatReturnsFalseWhenEndpointsNilAndNoCapabilities() {
+    let model = CopilotModel(id: "unknown-model")
+    #expect(model.isUsableForChat == false)
+}
+
+@Test func isUsableForChatReturnsTrueWhenEndpointsNilAndChatType() {
+    let capabilities = CopilotModelCapabilities(type: "chat")
+    let model = CopilotModel(id: "chat-model", capabilities: capabilities)
+    #expect(model.isUsableForChat == true)
+}
+
+@Test func isUsableForChatReturnsFalseWhenEndpointsNilAndEmbeddingsType() {
+    let capabilities = CopilotModelCapabilities(type: "embeddings")
+    let model = CopilotModel(id: "embedding-model", capabilities: capabilities)
+    #expect(model.isUsableForChat == false)
+}

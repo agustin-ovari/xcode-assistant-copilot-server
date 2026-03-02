@@ -1,6 +1,13 @@
 import Foundation
 
 extension AnyCodable {
+    var boolValue: Bool? {
+        if case .bool(let value) = self.value {
+            return value
+        }
+        return nil
+    }
+
     init(fromAny value: Any) {
         switch value {
         case let string as String:
