@@ -186,3 +186,40 @@ private func drainResponseBody(_ response: Response) async throws -> Data {
     let modelsResponse = try JSONDecoder().decode(ModelsResponse.self, from: data)
     #expect(modelsResponse.data.isEmpty)
 }
+
+@Test func modelsFiltersOutModelsWithPickerDisabled() async throws {
+    let copilotAPI = MockCopilotAPIService()
+    copilotAPI.models = [
+        CopilotModel(id: "visible-model", supportedEndpoints: ["/chat/completions"], modelPickerEnabled: true),
+        CopilotModel(id: "hidden-model", supportedEndpoints: ["/chat/completions"], modelPickerEnabled: false),
+    ]
+
+    let handler = makeModelsHandler(copilotAPI: copilotAPI)
+    let response = await handler.buildModelsResponse(credentials: makeCredentials())
+
+    #expect(response.status == HTTPResponse.Status.ok)
+    let data = try await drainResponseBody(response)
+    let modelsResponse = try JSONDecoder().decode(ModelsResponse.self, from: data)
+    #expect(modelsResponse.data.count == 1)
+    #expect(modelsResponse.data[0].id == "visible-model")
+}
+
+@Test func modelsFiltersOutModelsWithNonEnabledPolicy() async throws {
+    let copilotAPI = MockCopilotAPIService()
+    copilotAPI.models = [
+        CopilotModel(id: "enabled-model", supportedEndpoints: ["/chat/completions"], policy: CopilotModelPolicy(state: "enabled")),
+        CopilotModel(id: "pending-model", supportedEndpoints: ["/chat/completions"], policy: CopilotModelPolicy(state: "pending")),
+        CopilotModel(id: "consent-model", supportedEndpoints: ["/chat/completions"], policy: CopilotModelPolicy(state: "requires_consent")),
+        CopilotModel(id: "no-policy-model", supportedEndpoints: ["/chat/completions"]),
+    ]
+
+    let handler = makeModelsHandler(copilotAPI: copilotAPI)
+    let response = await handler.buildModelsResponse(credentials: makeCredentials())
+
+    #expect(response.status == HTTPResponse.Status.ok)
+    let data = try await drainResponseBody(response)
+    let modelsResponse = try JSONDecoder().decode(ModelsResponse.self, from: data)
+    #expect(modelsResponse.data.count == 2)
+    #expect(modelsResponse.data[0].id == "enabled-model")
+    #expect(modelsResponse.data[1].id == "no-policy-model")
+}

@@ -1,11 +1,21 @@
 import Foundation
 
+public struct CopilotModelPolicy: Decodable, Sendable {
+    public let state: String
+
+    public var isEnabled: Bool {
+        state == "enabled"
+    }
+}
+
 public struct CopilotModel: Decodable, Sendable {
     public let id: String
     public let name: String?
     public let version: String?
     public let capabilities: CopilotModelCapabilities?
     public let supportedEndpoints: [String]?
+    public let modelPickerEnabled: Bool
+    public let policy: CopilotModelPolicy?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -13,6 +23,8 @@ public struct CopilotModel: Decodable, Sendable {
         case version
         case capabilities
         case supportedEndpoints = "supported_endpoints"
+        case modelPickerEnabled = "model_picker_enabled"
+        case policy
     }
 
     public init(
@@ -20,13 +32,17 @@ public struct CopilotModel: Decodable, Sendable {
         name: String? = nil,
         version: String? = nil,
         capabilities: CopilotModelCapabilities? = nil,
-        supportedEndpoints: [String]? = nil
+        supportedEndpoints: [String]? = nil,
+        modelPickerEnabled: Bool = true,
+        policy: CopilotModelPolicy? = nil
     ) {
         self.id = id
         self.name = name
         self.version = version
         self.capabilities = capabilities
         self.supportedEndpoints = supportedEndpoints
+        self.modelPickerEnabled = modelPickerEnabled
+        self.policy = policy
     }
 
     public init(from decoder: Decoder) throws {
@@ -36,6 +52,8 @@ public struct CopilotModel: Decodable, Sendable {
         version = try container.decodeIfPresent(String.self, forKey: .version)
         capabilities = try? container.decodeIfPresent(CopilotModelCapabilities.self, forKey: .capabilities)
         supportedEndpoints = try? container.decodeIfPresent([String].self, forKey: .supportedEndpoints)
+        modelPickerEnabled = (try? container.decodeIfPresent(Bool.self, forKey: .modelPickerEnabled)) ?? true
+        policy = try? container.decodeIfPresent(CopilotModelPolicy.self, forKey: .policy)
     }
 
     public var requiresResponsesAPI: Bool {
@@ -55,6 +73,8 @@ public struct CopilotModel: Decodable, Sendable {
     }
 
     public var isUsableForChat: Bool {
+        guard modelPickerEnabled else { return false }
+        guard policy?.isEnabled ?? true else { return false }
         guard let endpoints = supportedEndpoints else {
             return capabilities?.type == "chat"
         }
