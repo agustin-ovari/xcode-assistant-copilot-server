@@ -1,6 +1,30 @@
 @testable import XcodeAssistantCopilotServer
 import Foundation
 
+actor CallToolGate {
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var signalCount = 0
+
+    func signal() {
+        if waiters.isEmpty {
+            signalCount += 1
+        } else {
+            let waiter = waiters.removeFirst()
+            waiter.resume()
+        }
+    }
+
+    func wait() async {
+        if signalCount > 0 {
+            signalCount -= 1
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+}
+
 final class MockMCPBridgeService: MCPBridgeServiceProtocol, @unchecked Sendable {
     var tools: [MCPTool] = []
     var callResults: [String: MCPToolResult] = [:]
@@ -12,6 +36,7 @@ final class MockMCPBridgeService: MCPBridgeServiceProtocol, @unchecked Sendable 
     var listToolsError: Error?
     var callToolError: Error?
     var callToolDelay: Duration?
+    let callToolGate = CallToolGate()
 
     func start() async throws {
         startCallCount += 1
@@ -29,6 +54,7 @@ final class MockMCPBridgeService: MCPBridgeServiceProtocol, @unchecked Sendable 
 
     func callTool(name: String, arguments: [String: AnyCodable]) async throws -> MCPToolResult {
         calledTools.append((name: name, arguments: arguments))
+        await callToolGate.signal()
         if let delay = callToolDelay {
             try await Task.sleep(for: delay)
         }

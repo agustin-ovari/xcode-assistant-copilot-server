@@ -47,16 +47,16 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     )
 }
 
-@Test func executeMCPToolReturnsBridgeNotAvailableWhenNoBridge() async {
+@Test func executeMCPToolReturnsBridgeNotAvailableWhenNoBridge() async throws {
     let handler = makeHandler(mcpBridge: nil)
     let toolCall = makeToolCall(name: "search")
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result.contains("MCP bridge not available"))
 }
 
-@Test func executeMCPToolBlockedWhenMCPPermissionNotApproved() async {
+@Test func executeMCPToolBlockedWhenMCPPermissionNotApproved() async throws {
     let mcpBridge = MockMCPBridgeService()
     mcpBridge.tools = [MCPTool(name: "search")]
     mcpBridge.callResults = ["search": MCPToolResult(content: [MCPToolResultContent(type: "text", text: "found")])]
@@ -73,7 +73,7 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     )
     let toolCall = makeToolCall(name: "search")
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result.contains("MCP tool execution is not approved"))
     #expect(result.contains("autoApprovePermissions"))
@@ -81,7 +81,7 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     #expect(logger.warnMessages.contains { $0.contains("not approved") })
 }
 
-@Test func executeMCPToolBlockedWhenAllPermissionsFalse() async {
+@Test func executeMCPToolBlockedWhenAllPermissionsFalse() async throws {
     let mcpBridge = MockMCPBridgeService()
     mcpBridge.tools = [MCPTool(name: "read_file")]
     mcpBridge.callResults = ["read_file": MCPToolResult(content: [MCPToolResultContent(type: "text", text: "content")])]
@@ -93,13 +93,13 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     let handler = makeHandler(mcpBridge: mcpBridge, configuration: config)
     let toolCall = makeToolCall(name: "read_file")
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result.contains("not approved"))
     #expect(mcpBridge.calledTools.isEmpty)
 }
 
-@Test func executeMCPToolBlockedWhenToolNotInAllowList() async {
+@Test func executeMCPToolBlockedWhenToolNotInAllowList() async throws {
     let mcpBridge = MockMCPBridgeService()
     mcpBridge.tools = [MCPTool(name: "delete_file")]
     mcpBridge.callResults = ["delete_file": MCPToolResult(content: [MCPToolResultContent(type: "text", text: "deleted")])]
@@ -116,7 +116,7 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     )
     let toolCall = makeToolCall(name: "delete_file")
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result.contains("not allowed by server configuration"))
     #expect(result.contains("delete_file"))
@@ -124,7 +124,7 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     #expect(logger.warnMessages.contains { $0.contains("not in the allowed tools list") })
 }
 
-@Test func executeMCPToolBlockedWhenNoMCPServersConfigured() async {
+@Test func executeMCPToolBlockedWhenNoMCPServersConfigured() async throws {
     let mcpBridge = MockMCPBridgeService()
     mcpBridge.callResults = ["search": MCPToolResult(content: [MCPToolResultContent(type: "text", text: "found")])]
 
@@ -135,13 +135,13 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     let handler = makeHandler(mcpBridge: mcpBridge, configuration: config)
     let toolCall = makeToolCall(name: "search")
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result.contains("not allowed by server configuration"))
     #expect(mcpBridge.calledTools.isEmpty)
 }
 
-@Test func executeMCPToolAllowedWhenPermissionAndAllowListPass() async {
+@Test func executeMCPToolAllowedWhenPermissionAndAllowListPass() async throws {
     let mcpBridge = MockMCPBridgeService()
     mcpBridge.callResults = ["search": MCPToolResult(content: [MCPToolResultContent(type: "text", text: "found it")])]
 
@@ -152,14 +152,14 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     let handler = makeHandler(mcpBridge: mcpBridge, configuration: config)
     let toolCall = makeToolCall(name: "search")
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result == "found it")
     #expect(mcpBridge.calledTools.count == 1)
     #expect(mcpBridge.calledTools[0].name == "search")
 }
 
-@Test func executeMCPToolAllowedWhenAllPermissionsTrue() async {
+@Test func executeMCPToolAllowedWhenAllPermissionsTrue() async throws {
     let mcpBridge = MockMCPBridgeService()
     mcpBridge.callResults = ["search": MCPToolResult(content: [MCPToolResultContent(type: "text", text: "result")])]
 
@@ -170,13 +170,13 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     let handler = makeHandler(mcpBridge: mcpBridge, configuration: config)
     let toolCall = makeToolCall(name: "search")
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result == "result")
     #expect(mcpBridge.calledTools.count == 1)
 }
 
-@Test func executeMCPToolAllowedWithWildcardInAllowedTools() async {
+@Test func executeMCPToolAllowedWithWildcardInAllowedTools() async throws {
     let mcpBridge = MockMCPBridgeService()
     mcpBridge.callResults = ["any_tool": MCPToolResult(content: [MCPToolResultContent(type: "text", text: "ok")])]
 
@@ -187,12 +187,12 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     let handler = makeHandler(mcpBridge: mcpBridge, configuration: config)
     let toolCall = makeToolCall(name: "any_tool")
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result == "ok")
 }
 
-@Test func executeMCPToolReturnsErrorWhenBridgeCallFails() async {
+@Test func executeMCPToolReturnsErrorWhenBridgeCallFails() async throws {
     let mcpBridge = MockMCPBridgeService()
     mcpBridge.callToolError = MCPToolError.executionFailed("timeout")
 
@@ -204,13 +204,13 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     let handler = makeHandler(mcpBridge: mcpBridge, configuration: config, logger: logger)
     let toolCall = makeToolCall(name: "search")
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result.contains("Error executing tool search"))
     #expect(logger.errorMessages.contains { $0.contains("search") && $0.contains("failed") })
 }
 
-@Test func executeMCPToolChecksPermissionBeforeAllowList() async {
+@Test func executeMCPToolChecksPermissionBeforeAllowList() async throws {
     let mcpBridge = MockMCPBridgeService()
     let config = ServerConfiguration(
         mcpServers: [:],
@@ -219,7 +219,7 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     let handler = makeHandler(mcpBridge: mcpBridge, configuration: config)
     let toolCall = makeToolCall(name: "search")
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result.contains("not approved"))
     #expect(!result.contains("not allowed by server configuration"))
@@ -1020,7 +1020,7 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     #expect(delta["tool_calls"] == nil)
 }
 
-@Test func executeMCPToolRetriesWithResolvedTabIdentifierWhenBridgeReturnsTabError() async {
+@Test func executeMCPToolRetriesWithResolvedTabIdentifierWhenBridgeReturnsTabError() async throws {
     let tabError = """
     Error: Valid tabIdentifier required. Choose from the following open windows:
     * tabIdentifier: windowtab1, workspacePath: /Users/dev/Projects/Sumatron2/Sumatron2.xcodeproj
@@ -1043,7 +1043,7 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
         arguments: #"{"tabIdentifier":"UserSummaryView.swift","filePath":"Sumatron2/Screens/Profile/UserSummaryView.swift","oldString":"old","newString":"new"}"#
     )
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result == "File updated successfully")
     #expect(mcpBridge.calledTools.count == 2)
@@ -1051,7 +1051,7 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     #expect(logger.debugMessages.contains { $0.contains("retrying with resolved") && $0.contains("windowtab1") })
 }
 
-@Test func executeMCPToolRetriesAndSelectsCorrectTabByFilePath() async {
+@Test func executeMCPToolRetriesAndSelectsCorrectTabByFilePath() async throws {
     let tabError = """
     Error: Valid tabIdentifier required. Choose from the following open windows:
     * tabIdentifier: windowtab1, workspacePath: /Users/dev/Projects/Sumatron2/Sumatron2.xcodeproj
@@ -1073,14 +1073,14 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
         arguments: #"{"tabIdentifier":"HomeView.swift","filePath":"spark-app-ios/Spark/Views/HomeView.swift"}"#
     )
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result == "file contents")
     #expect(mcpBridge.calledTools.count == 2)
     #expect(mcpBridge.calledTools[1].arguments["tabIdentifier"]?.stringValue == "windowtab2")
 }
 
-@Test func executeMCPToolReturnsFallbackTabWhenFilePathDoesNotMatchAnyWorkspace() async {
+@Test func executeMCPToolReturnsFallbackTabWhenFilePathDoesNotMatchAnyWorkspace() async throws {
     let tabError = """
     Error: Valid tabIdentifier required. Choose from the following open windows:
     * tabIdentifier: windowtab1, workspacePath: /Users/dev/Projects/Sumatron2/Sumatron2.xcodeproj
@@ -1101,14 +1101,14 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
         arguments: #"{"tabIdentifier":"someFile.swift","filePath":"OtherProject/SomeFile.swift","pattern":"foo"}"#
     )
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result == "grep results")
     #expect(mcpBridge.calledTools.count == 2)
     #expect(mcpBridge.calledTools[1].arguments["tabIdentifier"]?.stringValue == "windowtab1")
 }
 
-@Test func executeMCPToolDoesNotRetryWhenErrorTextHasNoWindowEntries() async {
+@Test func executeMCPToolDoesNotRetryWhenErrorTextHasNoWindowEntries() async throws {
     let tabErrorNoWindows = "Error: Valid tabIdentifier required. No windows open."
     let mcpBridge = MockMCPBridgeService()
     mcpBridge.callResults["XcodeUpdate"] = MCPToolResult(
@@ -1123,13 +1123,13 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
     let handler = makeHandler(mcpBridge: mcpBridge, configuration: config)
     let toolCall = makeToolCall(name: "XcodeUpdate", arguments: #"{"tabIdentifier":"foo","filePath":"Foo/Bar.swift","oldString":"a","newString":"b"}"#)
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result == tabErrorNoWindows)
     #expect(mcpBridge.calledTools.count == 1)
 }
 
-@Test func executeMCPToolUsesSourceFilePathWhenFilePathAbsent() async {
+@Test func executeMCPToolUsesSourceFilePathWhenFilePathAbsent() async throws {
     let tabError = """
     Error: Valid tabIdentifier required. Choose from the following open windows:
     * tabIdentifier: windowtab1, workspacePath: /Users/dev/Projects/MyApp/MyApp.xcodeproj
@@ -1150,10 +1150,142 @@ private func makeRequest(model: String = "gpt-4") -> ChatCompletionRequest {
         arguments: #"{"tabIdentifier":"bad","sourceFilePath":"MyApp/Sources/Main.swift","codeSnippet":"print(1)"}"#
     )
 
-    let result = await handler.executeMCPTool(toolCall: toolCall)
+    let result = try await handler.executeMCPTool(toolCall: toolCall)
 
     #expect(result == "snippet output")
     #expect(mcpBridge.calledTools.count == 2)
     #expect(mcpBridge.calledTools[1].arguments["tabIdentifier"]?.stringValue == "windowtab1")
+}
+
+@Test func executeMCPToolThrowsCancellationErrorWhenTaskIsCancelled() async throws {
+    let mcpBridge = MockMCPBridgeService()
+    mcpBridge.callToolDelay = .seconds(60)
+    mcpBridge.callResults = ["slow_tool": MCPToolResult(content: [MCPToolResultContent(type: "text", text: "done")])]
+
+    let config = ServerConfiguration(
+        mcpServers: ["s": MCPServerConfiguration(type: .local, command: "cmd", allowedTools: ["*"])],
+        autoApprovePermissions: .all(true)
+    )
+    let handler = makeHandler(mcpBridge: mcpBridge, configuration: config)
+    let toolCall = makeToolCall(name: "slow_tool")
+
+    let task = Task {
+        try await handler.executeMCPTool(toolCall: toolCall)
+    }
+
+    try await Task.sleep(for: .milliseconds(50))
+    task.cancel()
+
+    do {
+        _ = try await task.value
+        Issue.record("Expected CancellationError to be thrown")
+    } catch is CancellationError {
+        // expected
+    }
+}
+
+@Test func agentStreamingReturnsEmptyResponseWhenCancelledDuringCollect() async throws {
+    let mockAPI = MockCopilotAPIService()
+    let suspendingStream = AsyncThrowingStream<SSEEvent, Error> { continuation in
+        let task = Task {
+            try await Task.sleep(for: .seconds(60))
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in
+            task.cancel()
+        }
+    }
+    mockAPI.streamChatCompletionsResults = [.success(suspendingStream)]
+
+    let mcpBridge = MockMCPBridgeService()
+    mcpBridge.tools = []
+
+    let config = ServerConfiguration(
+        mcpServers: [:],
+        autoApprovePermissions: .all(true)
+    )
+    let handler = makeHandler(
+        copilotAPI: mockAPI,
+        mcpBridge: mcpBridge,
+        configuration: config
+    )
+    let request = makeRequest(model: "gpt-4")
+    let credentials = makeCredentials()
+
+    let task = Task {
+        await handler.handleAgentStreaming(request: request, credentials: credentials)
+    }
+
+    try await Task.sleep(for: .milliseconds(50))
+    task.cancel()
+
+    let response = await task.value
+    #expect(response.status == .ok)
+}
+
+@Test func agentStreamingReturnsEmptyResponseWhenCancelledDuringMCPToolExecution() async throws {
+    let mockAPI = MockCopilotAPIService()
+    let toolCall = makeToolCall(name: "slow_tool")
+    mockAPI.streamChatCompletionsResults = [.success(MockCopilotAPIService.makeToolCallStream(toolCalls: [toolCall]))]
+
+    let mcpBridge = MockMCPBridgeService()
+    mcpBridge.tools = [MCPTool(name: "slow_tool")]
+    mcpBridge.callToolDelay = .seconds(60)
+    mcpBridge.callResults = ["slow_tool": MCPToolResult(content: [MCPToolResultContent(type: "text", text: "done")])]
+
+    let config = ServerConfiguration(
+        mcpServers: ["s": MCPServerConfiguration(type: .local, command: "cmd", allowedTools: ["*"])],
+        autoApprovePermissions: .all(true)
+    )
+    let handler = makeHandler(
+        copilotAPI: mockAPI,
+        mcpBridge: mcpBridge,
+        configuration: config
+    )
+    let request = makeRequest(model: "gpt-4")
+    let credentials = makeCredentials()
+
+    let task = Task {
+        await handler.handleAgentStreaming(request: request, credentials: credentials)
+    }
+
+    // Wait until the MCP tool call has actually started before cancelling,
+    // so we are guaranteed to be testing cancellation mid-tool-execution.
+    await mcpBridge.callToolGate.wait()
+
+    task.cancel()
+
+    let response = await task.value
+    #expect(response.status == .ok)
+    #expect(mcpBridge.calledTools.count == 1)
+}
+
+@Test func directStreamingStopsWhenTaskIsCancelled() async throws {
+    let mockAPI = MockCopilotAPIService()
+    let infiniteStream = AsyncThrowingStream<SSEEvent, Error> { continuation in
+        let task = Task {
+            try await Task.sleep(for: .seconds(60))
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in
+            task.cancel()
+        }
+    }
+    mockAPI.streamChatCompletionsResults = [.success(infiniteStream)]
+
+    let handler = makeHandler(copilotAPI: mockAPI)
+    let request = makeRequest(model: "gpt-4")
+    let credentials = makeCredentials()
+
+    // Simulate a client that starts consuming the stream then disconnects
+    let handlerTask = Task {
+        await handler.handleDirectStreaming(request: request, credentials: credentials)
+    }
+
+    try await Task.sleep(for: .milliseconds(50))
+    handlerTask.cancel()
+
+    _ = await handlerTask.value
+    #expect(mockAPI.streamChatCompletionsCallCount == 1)
 }
 

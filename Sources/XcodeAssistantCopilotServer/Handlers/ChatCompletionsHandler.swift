@@ -37,40 +37,52 @@ public struct ChatCompletionsHandler: Sendable {
     }
 
     public func handle(request: Request) async throws -> Response {
-        let body = try await request.body.collect(upTo: configuration.bodyLimitBytes)
-
-        let completionRequest: ChatCompletionRequest
+        // consumeWithCancellationOnInboundClose monitors the inbound TCP stream.
+        // When Xcode hits Stop it closes the connection, which closes the inbound
+        // stream and throws CancellationError into the task running this closure,
+        // propagating cooperative cancellation to all awaits inside (collectStreamedResponse,
+        // executeMCPTool, Task.sleep, etc.).
         do {
-            completionRequest = try JSONDecoder().decode(ChatCompletionRequest.self, from: body)
-        } catch {
-            logger.warn("Invalid request body: \(error)")
-            return ErrorResponseBuilder.build(status: .badRequest, type: "invalid_request_error", message: "Invalid request body: \(error)")
-        }
+            return try await request.body.consumeWithCancellationOnInboundClose { body in
+            let bodyBuffer = try await body.collect(upTo: self.configuration.bodyLimitBytes)
 
-        guard !completionRequest.model.isEmpty else {
-            return ErrorResponseBuilder.build(status: .badRequest, type: "invalid_request_error", message: "Model is required")
-        }
+            let completionRequest: ChatCompletionRequest
+            do {
+                completionRequest = try JSONDecoder().decode(ChatCompletionRequest.self, from: bodyBuffer)
+            } catch {
+                self.logger.warn("Invalid request body: \(error)")
+                return ErrorResponseBuilder.build(status: .badRequest, type: "invalid_request_error", message: "Invalid request body: \(error)")
+            }
 
-        guard !completionRequest.messages.isEmpty else {
-            return ErrorResponseBuilder.build(status: .badRequest, type: "invalid_request_error", message: "Messages are required")
-        }
+            guard !completionRequest.model.isEmpty else {
+                return ErrorResponseBuilder.build(status: .badRequest, type: "invalid_request_error", message: "Model is required")
+            }
 
-        let credentials: CopilotCredentials
-        do {
-            credentials = try await authService.getValidCopilotToken()
-        } catch {
-            logger.error("Authentication failed: \(error)")
-            return ErrorResponseBuilder.build(status: .unauthorized, type: "api_error", message: "Authentication failed: \(error)")
-        }
+            guard !completionRequest.messages.isEmpty else {
+                return ErrorResponseBuilder.build(status: .badRequest, type: "invalid_request_error", message: "Messages are required")
+            }
 
-        if mcpBridge != nil {
-            return await handleAgentStreaming(request: completionRequest, credentials: credentials)
-        } else {
-            return await handleDirectStreaming(request: completionRequest, credentials: credentials)
+            let credentials: CopilotCredentials
+            do {
+                credentials = try await self.authService.getValidCopilotToken()
+            } catch {
+                self.logger.error("Authentication failed: \(error)")
+                return ErrorResponseBuilder.build(status: .unauthorized, type: "api_error", message: "Authentication failed: \(error)")
+            }
+
+            if self.mcpBridge != nil {
+                return await self.handleAgentStreaming(request: completionRequest, credentials: credentials)
+            } else {
+                return await self.handleDirectStreaming(request: completionRequest, credentials: credentials)
+            }
+        }
+        } catch is CancellationError {
+            logger.info("Request cancelled — user stopped the request from Xcode.")
+            throw CancellationError()
         }
     }
 
-    private func handleDirectStreaming(request: ChatCompletionRequest, credentials: CopilotCredentials) async -> Response {
+    func handleDirectStreaming(request: ChatCompletionRequest, credentials: CopilotCredentials) async -> Response {
         let copilotRequest = buildCopilotRequest(from: request)
 
         let eventStream: AsyncThrowingStream<SSEEvent, Error>
@@ -85,7 +97,7 @@ public struct ChatCompletionsHandler: Sendable {
         logger.info("Streaming response (direct mode)")
 
         let responseStream = AsyncStream<ByteBuffer> { continuation in
-            Task {
+            let task = Task {
                 do {
                     try await withThrowingTaskGroup(of: Void.self) { group in
                         group.addTask {
@@ -98,7 +110,7 @@ public struct ChatCompletionsHandler: Sendable {
                             do {
                                 for try await event in eventStream {
                                     if Task.isCancelled {
-                                        logger.debug("Direct stream: task cancelled after \(forwardedEventCount) forwarded events")
+                                        logger.debug("Direct stream: cancelled after \(forwardedEventCount) forwarded events")
                                         break
                                     }
 
@@ -134,6 +146,9 @@ public struct ChatCompletionsHandler: Sendable {
                     continuation.finish()
                 }
             }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
         }
 
         return Response(status: .ok, headers: sseHeaders(), body: .init(asyncSequence: responseStream))
@@ -163,6 +178,10 @@ public struct ChatCompletionsHandler: Sendable {
         var iteration = 0
 
         while iteration < Self.maxAgentLoopIterations {
+            guard !Task.isCancelled else {
+                logger.debug("Agent loop cancelled before iteration \(iteration + 1)")
+                return Response(status: .ok, headers: sseHeaders(), body: .init(byteBuffer: ByteBuffer()))
+            }
             iteration += 1
             logger.debug("Agent loop iteration \(iteration)")
 
@@ -182,6 +201,9 @@ public struct ChatCompletionsHandler: Sendable {
             let collectedResponse: CollectedResponse
             do {
                 collectedResponse = try await collectStreamedResponse(request: copilotRequest, credentials: credentials)
+            } catch is CancellationError {
+                logger.debug("Agent loop cancelled at iteration \(iteration)")
+                return Response(status: .ok, headers: sseHeaders(), body: .init(byteBuffer: ByteBuffer()))
             } catch {
                 logger.error("Agent loop failed at iteration \(iteration): \(error)")
                 return ErrorResponseBuilder.build(status: .internalServerError, type: "api_error", message: "Streaming failed: \(error)")
@@ -216,7 +238,15 @@ public struct ChatCompletionsHandler: Sendable {
                     messages.append(assistantMessage)
 
                     for toolCall in mcpCalls {
-                        let toolResult = await executeMCPTool(toolCall: toolCall)
+                        let toolResult: String
+                        do {
+                            toolResult = try await executeMCPTool(toolCall: toolCall)
+                        } catch is CancellationError {
+                            logger.debug("Agent loop cancelled during MCP tool execution")
+                            return Response(status: .ok, headers: sseHeaders(), body: .init(byteBuffer: ByteBuffer()))
+                        } catch {
+                            toolResult = "Error executing tool \(toolCall.function.name ?? ""): \(error)"
+                        }
                         let toolMessage = ChatCompletionMessage(
                             role: .tool,
                             content: .text(toolResult),
@@ -293,6 +323,8 @@ public struct ChatCompletionsHandler: Sendable {
         var toolCallBuilders: [Int: ToolCallBuilder] = [:]
 
         for try await event in eventStream {
+            try Task.checkCancellation()
+
             if event.isDone { break }
 
             let chunk: ChatCompletionChunk
@@ -338,7 +370,7 @@ public struct ChatCompletionsHandler: Sendable {
         return CollectedResponse(content: content, toolCalls: toolCalls)
     }
 
-    func executeMCPTool(toolCall: ToolCall) async -> String {
+    func executeMCPTool(toolCall: ToolCall) async throws -> String {
         guard let mcpBridge else {
             return "Error: MCP bridge not available"
         }
@@ -390,6 +422,9 @@ public struct ChatCompletionsHandler: Sendable {
             }
 
             return text
+        } catch is CancellationError {
+            logger.debug("MCP tool '\(toolName)' cancelled")
+            throw CancellationError()
         } catch {
             logger.error("MCP tool \(toolName) failed: \(error)")
             return "Error executing tool \(toolName): \(error)"

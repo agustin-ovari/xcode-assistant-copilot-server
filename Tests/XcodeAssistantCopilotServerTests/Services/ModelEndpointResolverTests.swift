@@ -187,38 +187,9 @@ private let testCredentials = CopilotCredentials(
 }
 
 @Test func resolverCachesModelList() async {
-    var callCount = 0
     let models = [
         CopilotModel(id: "gpt-5.1-codex", supportedEndpoints: ["/responses"])
     ]
-
-    final class CountingAPIService: CopilotAPIServiceProtocol, @unchecked Sendable {
-        let models: [CopilotModel]
-        var callCount = 0
-
-        init(models: [CopilotModel]) {
-            self.models = models
-        }
-
-        func listModels(credentials: CopilotCredentials) async throws -> [CopilotModel] {
-            callCount += 1
-            return models
-        }
-
-        func streamChatCompletions(
-            request: CopilotChatRequest,
-            credentials: CopilotCredentials
-        ) async throws -> AsyncThrowingStream<SSEEvent, Error> {
-            fatalError("Not used")
-        }
-
-        func streamResponses(
-            request: ResponsesAPIRequest,
-            credentials: CopilotCredentials
-        ) async throws -> AsyncThrowingStream<SSEEvent, Error> {
-            fatalError("Not used")
-        }
-    }
 
     let countingAPI = CountingAPIService(models: models)
     let logger = MockLogger()
