@@ -158,6 +158,7 @@ On first launch, the server creates a default configuration file at `~/.config/x
 
 ### Configuration File Format
 
+This is the default config that has Xcode MCP enabled by default.
 ```json
 {
   "mcpServers": {
@@ -168,6 +169,18 @@ On first launch, the server creates a default configuration file at `~/.config/x
       "allowedTools": ["*"]
     }
   },
+  "allowedCliTools": [],
+  "bodyLimitMiB": 4,
+  "excludedFilePatterns": [],
+  "reasoningEffort": "xhigh",
+  "autoApprovePermissions": ["read", "mcp"]
+}
+```
+
+To use the non MCP version just remove the whole 'xcode' object from the json.
+```json
+{
+  "mcpServers": {},
   "allowedCliTools": [],
   "bodyLimitMiB": 4,
   "excludedFilePatterns": [],
