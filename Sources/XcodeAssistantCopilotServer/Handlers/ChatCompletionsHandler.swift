@@ -377,7 +377,7 @@ public struct ChatCompletionsHandler: Sendable {
             do {
                 chunk = try event.decodeData(ChatCompletionChunk.self)
             } catch {
-                logger.debug("Failed to decode chunk: \(event.data.prefix(200))")
+                logger.debug("Failed to decode chunk: \(event.data)")
                 continue
             }
 

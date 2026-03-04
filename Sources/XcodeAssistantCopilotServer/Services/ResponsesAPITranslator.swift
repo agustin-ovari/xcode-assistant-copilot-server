@@ -116,7 +116,7 @@ public struct ResponsesAPITranslator: Sendable {
                             break
                         }
 
-                        let dataPreview = event.data.prefix(200)
+                        let dataPreview = event.data
                         // DEBUG: logger.debug("adaptStream: raw event #\(eventCount) — type=\(event.event ?? "nil"), data=\(dataPreview)") // DEBUG: All raw event = too much console output
 
                         let eventType: ResponsesEventType

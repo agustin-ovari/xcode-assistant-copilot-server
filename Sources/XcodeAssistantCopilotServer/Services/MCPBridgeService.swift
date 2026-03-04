@@ -210,7 +210,7 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
 
         let isError = result.raw["isError"]?.boolValue ?? false
         let toolResult = MCPToolResult(content: content, isError: isError)
-        logger.debug("MCP tool \(name) completed: \(toolResult.textContent.prefix(200))")
+        logger.debug("MCP tool \(name) completed: \(toolResult.textContent)")
         return toolResult
     }
 
