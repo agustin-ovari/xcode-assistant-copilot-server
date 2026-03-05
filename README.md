@@ -30,7 +30,7 @@ The server uses a multi-layered authentication strategy:
 
 1. **Stored OAuth token** — On first use, a GitHub Device Code OAuth flow is triggered. The resulting token is stored at `~/.config/xcode-assistant-copilot-server/github-token.json` (with `0600` permissions) and reused on subsequent launches.
 2. **GitHub CLI fallback** — If no stored token is found, the server tries `gh auth token` from the GitHub CLI as a fallback.
-3. **Automatic device code flow** — If the Copilot token exchange fails (e.g. the `gh` token lacks Copilot scopes), the server automatically initiates a device code flow. You'll be prompted to visit a URL and enter a code in your browser.
+3. **Automatic device code flow** — If no token is available at all (GitHub CLI not installed or not authenticated), or if the token exchange is rejected by GitHub (e.g. the `gh` token lacks Copilot scopes), the server automatically initiates a device code flow. You'll be prompted to visit a URL and enter a code in your browser.
 
 The device code flow uses the same OAuth client ID (`Iv1.b507a08c87ecfe98`) as other Copilot integrations (copilot.vim, copilot.el, etc.) to ensure the resulting token has access to the Copilot API.
 
@@ -38,10 +38,20 @@ Once authenticated, the server exchanges your GitHub token for a short-lived Cop
 
 ## Requirements
 
+### Homebrew install
+
 - **macOS 26** or newer
-- **Swift 6.2.3+** (install via [Swiftly](https://swiftlang.github.io/swiftly/))
+- **Xcode Command Line Tools 26.x** — any 26.x release is sufficient (`xcode-select --install`). Homebrew builds the binary using the system Swift bundled with the CLT; no separate Swift or Swiftly installation is needed.
 - **GitHub Copilot subscription** — Individual, Business, or Enterprise
-- **Xcode 26** or newer (Xcode 26.3+ for MCP tool support)
+- **Xcode 26** or newer to use the provider (Xcode 26.3+ for MCP tool support)
+- **GitHub CLI** (`gh`) — optional, used as a fallback authentication method
+
+### Manual / source build
+
+- **macOS 26** or newer
+- **Swift 6.2.4+** — install via [Swiftly](https://swiftlang.github.io/swiftly/) or Xcode Command Line Tools 26.x
+- **GitHub Copilot subscription** — Individual, Business, or Enterprise
+- **Xcode 26** or newer to use the provider (Xcode 26.3+ for MCP tool support)
 - **GitHub CLI** (`gh`) — optional, used as a fallback authentication method
 
 ## Installation
