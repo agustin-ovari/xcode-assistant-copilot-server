@@ -46,7 +46,7 @@ struct App: AsyncParsableCommand {
         orphanCleaner.cleanupIfNeeded()
 
         let processRunner = ProcessRunner()
-        let httpClient = HTTPClient()
+        let httpClient = HTTPClient(timeoutIntervalForRequest: configuration.timeouts.httpClientTimeoutSeconds)
         let deviceFlowService = GitHubDeviceFlowService(logger: logger, httpClient: httpClient)
         let authService = GitHubCLIAuthService(
             processRunner: processRunner,
@@ -72,7 +72,11 @@ struct App: AsyncParsableCommand {
             }
         }
 
-        let copilotAPI = CopilotAPIService(httpClient: httpClient, logger: logger)
+        let copilotAPI = CopilotAPIService(
+            httpClient: httpClient,
+            logger: logger,
+            streamingEndpointTimeout: configuration.timeouts.streamingEndpointTimeoutSeconds
+        )
 
         var mcpBridge: MCPBridgeServiceProtocol?
 

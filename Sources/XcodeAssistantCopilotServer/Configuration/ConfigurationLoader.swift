@@ -166,7 +166,8 @@ public struct ConfigurationLoader: ConfigurationLoaderProtocol {
             bodyLimitMiB: configuration.bodyLimitMiB,
             excludedFilePatterns: configuration.excludedFilePatterns,
             reasoningEffort: configuration.reasoningEffort,
-            autoApprovePermissions: configuration.autoApprovePermissions
+            autoApprovePermissions: configuration.autoApprovePermissions,
+            timeouts: configuration.timeouts
         )
     }
 

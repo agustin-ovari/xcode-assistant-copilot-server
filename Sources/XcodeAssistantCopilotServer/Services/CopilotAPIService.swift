@@ -36,11 +36,13 @@ public struct CopilotAPIService: CopilotAPIServiceProtocol {
     private let httpClient: HTTPClientProtocol
     private let logger: LoggerProtocol
     private let sseParser: SSEParser
+    private let streamingEndpointTimeout: TimeInterval
 
-    public init(httpClient: HTTPClientProtocol, logger: LoggerProtocol) {
+    public init(httpClient: HTTPClientProtocol, logger: LoggerProtocol, streamingEndpointTimeout: TimeInterval = 300) {
         self.httpClient = httpClient
         self.logger = logger
         self.sseParser = SSEParser()
+        self.streamingEndpointTimeout = streamingEndpointTimeout
     }
 
     public func listModels(credentials: CopilotCredentials) async throws -> [CopilotModel] {
@@ -79,7 +81,7 @@ public struct CopilotAPIService: CopilotAPIServiceProtocol {
     ) async throws -> AsyncThrowingStream<SSEEvent, Error> {
         let endpoint: ChatCompletionsStreamEndpoint
         do {
-            endpoint = try ChatCompletionsStreamEndpoint(request: request, credentials: credentials)
+            endpoint = try ChatCompletionsStreamEndpoint(request: request, credentials: credentials, timeoutInterval: streamingEndpointTimeout)
         } catch {
             throw CopilotAPIError.streamingFailed("Failed to encode request body: \(error.localizedDescription)")
         }
@@ -111,7 +113,7 @@ public struct CopilotAPIService: CopilotAPIServiceProtocol {
     ) async throws -> AsyncThrowingStream<SSEEvent, Error> {
         let endpoint: ResponsesStreamEndpoint
         do {
-            endpoint = try ResponsesStreamEndpoint(request: request, credentials: credentials)
+            endpoint = try ResponsesStreamEndpoint(request: request, credentials: credentials, timeoutInterval: streamingEndpointTimeout)
         } catch {
             logger.error("Failed to encode responses request body: \(error)")
             throw CopilotAPIError.streamingFailed("Failed to encode responses request body: \(error.localizedDescription)")

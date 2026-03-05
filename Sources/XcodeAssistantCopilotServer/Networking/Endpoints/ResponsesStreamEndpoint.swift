@@ -6,11 +6,12 @@ public struct ResponsesStreamEndpoint: Endpoint {
     public let path = "/responses"
     public let headers: [String: String]
     public let body: Data?
-    public let timeoutInterval: TimeInterval = 300
+    public let timeoutInterval: TimeInterval
 
-    public init(request: ResponsesAPIRequest, credentials: CopilotCredentials) throws {
+    public init(request: ResponsesAPIRequest, credentials: CopilotCredentials, timeoutInterval: TimeInterval = 300) throws {
         self.baseURL = credentials.apiEndpoint
         self.headers = CopilotRequestHeaders.streaming(token: credentials.token)
         self.body = try JSONEncoder().encode(request)
+        self.timeoutInterval = timeoutInterval
     }
 }

@@ -13,7 +13,6 @@ public struct ChatCompletionsHandler: Sendable {
     private let configuration: ServerConfiguration
     private let logger: LoggerProtocol
 
-    private static let requestTimeoutSeconds: UInt64 = 5 * 60
     private static let maxAgentLoopIterations = 20
     private static let maxReasoningEffortRetries = 3
 
@@ -101,7 +100,7 @@ public struct ChatCompletionsHandler: Sendable {
                 do {
                     try await withThrowingTaskGroup(of: Void.self) { group in
                         group.addTask {
-                            try await Task.sleep(for: .seconds(Self.requestTimeoutSeconds))
+                            try await Task.sleep(for: .seconds(configuration.timeouts.requestTimeoutSeconds))
                             throw ChatCompletionsHandlerError.timeout
                         }
 
@@ -141,7 +140,7 @@ public struct ChatCompletionsHandler: Sendable {
                     }
                 } catch {
                     if error is ChatCompletionsHandlerError {
-                        logger.warn("Stream timed out after \(Self.requestTimeoutSeconds) seconds")
+                        logger.warn("Stream timed out after \(configuration.timeouts.requestTimeoutSeconds) seconds")
                     }
                     continuation.finish()
                 }

@@ -1,5 +1,24 @@
 import Foundation
 
+public struct TimeoutsConfiguration: Codable, Sendable {
+    public let requestTimeoutSeconds: UInt64
+    public let streamingEndpointTimeoutSeconds: TimeInterval
+    public let defaultEndpointTimeoutSeconds: TimeInterval
+    public let httpClientTimeoutSeconds: TimeInterval
+
+    public init(
+        requestTimeoutSeconds: UInt64 = 300,
+        streamingEndpointTimeoutSeconds: TimeInterval = 300,
+        defaultEndpointTimeoutSeconds: TimeInterval = 60,
+        httpClientTimeoutSeconds: TimeInterval = 300
+    ) {
+        self.requestTimeoutSeconds = requestTimeoutSeconds
+        self.streamingEndpointTimeoutSeconds = streamingEndpointTimeoutSeconds
+        self.defaultEndpointTimeoutSeconds = defaultEndpointTimeoutSeconds
+        self.httpClientTimeoutSeconds = httpClientTimeoutSeconds
+    }
+}
+
 public enum ReasoningEffort: String, Codable, Sendable, Comparable {
     case low
     case medium
@@ -131,6 +150,7 @@ public struct ServerConfiguration: Codable, Sendable {
     public let excludedFilePatterns: [String]
     public let reasoningEffort: ReasoningEffort?
     public let autoApprovePermissions: AutoApprovePermissions
+    public let timeouts: TimeoutsConfiguration
 
     public init(
         mcpServers: [String: MCPServerConfiguration] = [:],
@@ -138,7 +158,8 @@ public struct ServerConfiguration: Codable, Sendable {
         bodyLimitMiB: Int = 4,
         excludedFilePatterns: [String] = [],
         reasoningEffort: ReasoningEffort? = .xhigh,
-        autoApprovePermissions: AutoApprovePermissions = .kinds([.read, .mcp])
+        autoApprovePermissions: AutoApprovePermissions = .kinds([.read, .mcp]),
+        timeouts: TimeoutsConfiguration = TimeoutsConfiguration()
     ) {
         self.mcpServers = mcpServers
         self.allowedCliTools = allowedCliTools
@@ -146,6 +167,18 @@ public struct ServerConfiguration: Codable, Sendable {
         self.excludedFilePatterns = excludedFilePatterns
         self.reasoningEffort = reasoningEffort
         self.autoApprovePermissions = autoApprovePermissions
+        self.timeouts = timeouts
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mcpServers = try container.decode([String: MCPServerConfiguration].self, forKey: .mcpServers)
+        allowedCliTools = try container.decode([String].self, forKey: .allowedCliTools)
+        bodyLimitMiB = try container.decode(Int.self, forKey: .bodyLimitMiB)
+        excludedFilePatterns = try container.decode([String].self, forKey: .excludedFilePatterns)
+        reasoningEffort = try container.decodeIfPresent(ReasoningEffort.self, forKey: .reasoningEffort)
+        autoApprovePermissions = try container.decode(AutoApprovePermissions.self, forKey: .autoApprovePermissions)
+        timeouts = try container.decodeIfPresent(TimeoutsConfiguration.self, forKey: .timeouts) ?? TimeoutsConfiguration()
     }
 
     public var bodyLimitBytes: Int {

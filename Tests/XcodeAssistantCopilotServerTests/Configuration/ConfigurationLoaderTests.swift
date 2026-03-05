@@ -103,6 +103,10 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
     #expect(config.autoApprovePermissions.isApproved(.mcp) == true)
     #expect(config.autoApprovePermissions.isApproved(.write) == false)
     #expect(config.autoApprovePermissions.isApproved(.shell) == false)
+    #expect(config.timeouts.requestTimeoutSeconds == 300)
+    #expect(config.timeouts.streamingEndpointTimeoutSeconds == 300)
+    #expect(config.timeouts.defaultEndpointTimeoutSeconds == 60)
+    #expect(config.timeouts.httpClientTimeoutSeconds == 300)
 }
 
 @Test func loadCreatesDefaultConfigDirectoryIfMissing() throws {
@@ -732,6 +736,10 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
     #expect(config.autoApprovePermissions.isApproved(.mcp) == true)
     #expect(config.autoApprovePermissions.isApproved(.write) == false)
     #expect(config.hasLocalMCPServers == false)
+    #expect(config.timeouts.requestTimeoutSeconds == 300)
+    #expect(config.timeouts.streamingEndpointTimeoutSeconds == 300)
+    #expect(config.timeouts.defaultEndpointTimeoutSeconds == 60)
+    #expect(config.timeouts.httpClientTimeoutSeconds == 300)
 }
 
 @Test func serverConfigurationBodyLimitBytesCalculation() {
@@ -937,6 +945,93 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
     #expect(server?.env?["ANOTHER_VAR"] == "value2")
     #expect(server?.cwd == "/tmp")
     #expect(server?.timeout == 30.0)
+}
+
+@Test func timeoutsConfigurationUsesDefaultValues() {
+    let timeouts = TimeoutsConfiguration()
+    #expect(timeouts.requestTimeoutSeconds == 300)
+    #expect(timeouts.streamingEndpointTimeoutSeconds == 300)
+    #expect(timeouts.defaultEndpointTimeoutSeconds == 60)
+    #expect(timeouts.httpClientTimeoutSeconds == 300)
+}
+
+@Test func timeoutsConfigurationAcceptsCustomValues() {
+    let timeouts = TimeoutsConfiguration(
+        requestTimeoutSeconds: 120,
+        streamingEndpointTimeoutSeconds: 180,
+        defaultEndpointTimeoutSeconds: 30,
+        httpClientTimeoutSeconds: 240
+    )
+    #expect(timeouts.requestTimeoutSeconds == 120)
+    #expect(timeouts.streamingEndpointTimeoutSeconds == 180)
+    #expect(timeouts.defaultEndpointTimeoutSeconds == 30)
+    #expect(timeouts.httpClientTimeoutSeconds == 240)
+}
+
+@Test func serverConfigurationUsesDefaultTimeouts() {
+    let config = ServerConfiguration()
+    #expect(config.timeouts.requestTimeoutSeconds == 300)
+    #expect(config.timeouts.streamingEndpointTimeoutSeconds == 300)
+    #expect(config.timeouts.defaultEndpointTimeoutSeconds == 60)
+    #expect(config.timeouts.httpClientTimeoutSeconds == 300)
+}
+
+@Test func loadParsesTimeoutsFromConfig() throws {
+    let logger = MockLogger()
+    let loader = ConfigurationLoader(logger: logger)
+
+    let json = """
+    {
+        "mcpServers": {},
+        "allowedCliTools": [],
+        "bodyLimitMiB": 4,
+        "excludedFilePatterns": [],
+        "autoApprovePermissions": true,
+        "timeouts": {
+            "requestTimeoutSeconds": 600,
+            "streamingEndpointTimeoutSeconds": 600,
+            "defaultEndpointTimeoutSeconds": 90,
+            "httpClientTimeoutSeconds": 600
+        }
+    }
+    """
+
+    let tempDir = FileManager.default.temporaryDirectory
+    let configPath = tempDir.appendingPathComponent("test_timeouts_\(UUID().uuidString).json")
+    try json.write(to: configPath, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: configPath) }
+
+    let config = try loader.load(from: configPath.path)
+    #expect(config.timeouts.requestTimeoutSeconds == 600)
+    #expect(config.timeouts.streamingEndpointTimeoutSeconds == 600)
+    #expect(config.timeouts.defaultEndpointTimeoutSeconds == 90)
+    #expect(config.timeouts.httpClientTimeoutSeconds == 600)
+}
+
+@Test func loadUsesDefaultTimeoutsWhenNotSpecifiedInConfig() throws {
+    let logger = MockLogger()
+    let loader = ConfigurationLoader(logger: logger)
+
+    let json = """
+    {
+        "mcpServers": {},
+        "allowedCliTools": [],
+        "bodyLimitMiB": 4,
+        "excludedFilePatterns": [],
+        "autoApprovePermissions": true
+    }
+    """
+
+    let tempDir = FileManager.default.temporaryDirectory
+    let configPath = tempDir.appendingPathComponent("test_no_timeouts_\(UUID().uuidString).json")
+    try json.write(to: configPath, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: configPath) }
+
+    let config = try loader.load(from: configPath.path)
+    #expect(config.timeouts.requestTimeoutSeconds == 300)
+    #expect(config.timeouts.streamingEndpointTimeoutSeconds == 300)
+    #expect(config.timeouts.defaultEndpointTimeoutSeconds == 60)
+    #expect(config.timeouts.httpClientTimeoutSeconds == 300)
 }
 
 @Test func loadParsesBodyLimitBoundaryValues() throws {

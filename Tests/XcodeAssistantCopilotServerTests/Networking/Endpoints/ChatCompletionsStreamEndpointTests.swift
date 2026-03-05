@@ -35,7 +35,7 @@ import Testing
     #expect(endpoint.baseURL == "https://copilot.example.com")
 }
 
-@Test func chatCompletionsStreamEndpointHas300SecondTimeout() throws {
+@Test func chatCompletionsStreamEndpointUsesDefaultTimeout() throws {
     let endpoint = try ChatCompletionsStreamEndpoint(
         request: CopilotChatRequest(
             model: "gpt-4o",
@@ -44,6 +44,18 @@ import Testing
         credentials: CopilotCredentials(token: "test-token", apiEndpoint: "https://api.example.com")
     )
     #expect(endpoint.timeoutInterval == 300)
+}
+
+@Test func chatCompletionsStreamEndpointUsesCustomTimeout() throws {
+    let endpoint = try ChatCompletionsStreamEndpoint(
+        request: CopilotChatRequest(
+            model: "gpt-4o",
+            messages: [ChatCompletionMessage(role: .user, content: .text("Hi"))]
+        ),
+        credentials: CopilotCredentials(token: "test-token", apiEndpoint: "https://api.example.com"),
+        timeoutInterval: 120
+    )
+    #expect(endpoint.timeoutInterval == 120)
 }
 
 @Test func chatCompletionsStreamEndpointIncludesBearerAuthHeader() throws {

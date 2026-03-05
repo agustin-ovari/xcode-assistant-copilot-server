@@ -74,7 +74,7 @@ import Testing
     #expect(endpoint.headers["X-Request-Id"] != nil)
 }
 
-@Test func responsesStreamEndpointHas300SecondTimeout() throws {
+@Test func responsesStreamEndpointUsesDefaultTimeout() throws {
     let endpoint = try ResponsesStreamEndpoint(
         request: ResponsesAPIRequest(
             model: "gpt-4o",
@@ -83,6 +83,18 @@ import Testing
         credentials: CopilotCredentials(token: "test-token", apiEndpoint: "https://api.example.com")
     )
     #expect(endpoint.timeoutInterval == 300)
+}
+
+@Test func responsesStreamEndpointUsesCustomTimeout() throws {
+    let endpoint = try ResponsesStreamEndpoint(
+        request: ResponsesAPIRequest(
+            model: "gpt-4o",
+            input: [.message(ResponsesMessage(role: "user", content: "Hello"))]
+        ),
+        credentials: CopilotCredentials(token: "test-token", apiEndpoint: "https://api.example.com"),
+        timeoutInterval: 120
+    )
+    #expect(endpoint.timeoutInterval == 120)
 }
 
 @Test func responsesStreamEndpointEncodesBodyAsJSON() throws {

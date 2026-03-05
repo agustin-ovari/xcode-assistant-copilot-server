@@ -11,5 +11,11 @@
   "bodyLimitMiB": 4,
   "excludedFilePatterns": [],
   "reasoningEffort": "xhigh",
-  "autoApprovePermissions": ["read", "mcp"]
+  "autoApprovePermissions": ["read", "mcp"],
+  "timeouts": {
+    "requestTimeoutSeconds": 300,
+    "streamingEndpointTimeoutSeconds": 300,
+    "defaultEndpointTimeoutSeconds": 60,
+    "httpClientTimeoutSeconds": 300
+  }
 }
