@@ -4,7 +4,7 @@ public struct ChatCompletionChunk: Codable, Sendable {
     public let id: String
     public let object: String?
     public let created: Int
-    public let model: String
+    public let model: String?
     public let choices: [ChunkChoice]
     public let systemFingerprint: String?
 
@@ -21,7 +21,7 @@ public struct ChatCompletionChunk: Codable, Sendable {
         id: String,
         object: String? = "chat.completion.chunk",
         created: Int = ChatCompletionChunk.currentTimestamp(),
-        model: String,
+        model: String? = nil,
         choices: [ChunkChoice],
         systemFingerprint: String? = nil
     ) {

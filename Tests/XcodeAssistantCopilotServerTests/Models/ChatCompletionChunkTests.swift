@@ -9,7 +9,7 @@ import Testing
     let data = json.data(using: .utf8)!
     let chunk = try JSONDecoder().decode(ChatCompletionChunk.self, from: data)
     #expect(chunk.id == "msg_01CPxga2wL4DMtEp32WWJEu6")
-    #expect(chunk.model == "claude-haiku-4.5")
+    #expect(chunk.model == "claude-haiku-4.5")  // model is String?
     #expect(chunk.object == nil)
     #expect(chunk.choices.count == 1)
     #expect(chunk.choices[0].delta?.content == "Hello")
@@ -139,6 +139,24 @@ import Testing
     #expect(chunk.choices.isEmpty)
     #expect(chunk.systemFingerprint == nil)
     #expect(chunk.created > 0)
+}
+
+@Test func chunkInitWithoutModelDefaultsToNil() {
+    let chunk = ChatCompletionChunk(
+        id: "id-2",
+        choices: []
+    )
+    #expect(chunk.model == nil)
+}
+
+@Test func chunkDecodesWhenModelIsMissing() throws {
+    let json = """
+    {"choices":[],"created":0,"id":"","prompt_filter_results":[{"content_filter_results":{"hate":{"filtered":false,"severity":"safe"},"self_harm":{"filtered":false,"severity":"safe"},"sexual":{"filtered":false,"severity":"safe"},"violence":{"filtered":false,"severity":"safe"}},"prompt_index":0}]}
+    """
+    let data = json.data(using: .utf8)!
+    let chunk = try JSONDecoder().decode(ChatCompletionChunk.self, from: data)
+    #expect(chunk.model == nil)
+    #expect(chunk.choices.isEmpty)
 }
 
 @Test func chunkEncodesAndDecodesRoundTrip() throws {
