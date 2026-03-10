@@ -27,7 +27,6 @@ public struct ChatCompletionRequest: Codable, Sendable {
     public let messages: [ChatCompletionMessage]
     public let temperature: Double?
     public let topP: Double?
-    public let n: Int?
     public let stop: StopSequence?
     public let maxTokens: Int?
     public let presencePenalty: Double?
@@ -42,7 +41,6 @@ public struct ChatCompletionRequest: Codable, Sendable {
         case messages
         case temperature
         case topP = "top_p"
-        case n
         case stop
         case maxTokens = "max_tokens"
         case presencePenalty = "presence_penalty"
@@ -58,7 +56,6 @@ public struct ChatCompletionRequest: Codable, Sendable {
         messages: [ChatCompletionMessage],
         temperature: Double? = nil,
         topP: Double? = nil,
-        n: Int? = nil,
         stop: StopSequence? = nil,
         maxTokens: Int? = nil,
         presencePenalty: Double? = nil,
@@ -72,7 +69,6 @@ public struct ChatCompletionRequest: Codable, Sendable {
         self.messages = messages
         self.temperature = temperature
         self.topP = topP
-        self.n = n
         self.stop = stop
         self.maxTokens = maxTokens
         self.presencePenalty = presencePenalty
