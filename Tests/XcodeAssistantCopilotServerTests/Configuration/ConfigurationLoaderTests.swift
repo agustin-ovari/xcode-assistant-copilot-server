@@ -1122,3 +1122,96 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
     #expect(config100.bodyLimitMiB == 100)
     #expect(config100.bodyLimitBytes == 100 * 1024 * 1024)
 }
+
+@Test func loadBackfillsMissingKeysIntoConfigFile() throws {
+    let (directory, configPath, cleanup) = makeTempConfigDir()
+    defer { cleanup() }
+
+    let partialJSON = """
+    {
+      "mcpServers": {},
+      "allowedCliTools": [],
+      "bodyLimitMiB": 4,
+      "excludedFilePatterns": [],
+      "autoApprovePermissions": true
+    }
+    """
+    try partialJSON.write(toFile: configPath, atomically: true, encoding: .utf8)
+
+    let logger = MockLogger()
+    let loader = ConfigurationLoader(
+        logger: logger,
+        defaultConfigDirectory: directory,
+        defaultConfigPath: configPath
+    )
+
+    _ = try loader.load(from: nil)
+
+    let updatedData = try Data(contentsOf: URL(fileURLWithPath: configPath))
+    let updatedJSON = try JSONSerialization.jsonObject(with: updatedData) as? [String: Any]
+
+    #expect(updatedJSON?["reasoningEffort"] != nil)
+    #expect(updatedJSON?["timeouts"] != nil)
+    #expect(updatedJSON?["maxAgentLoopIterations"] != nil)
+    #expect(updatedJSON?["mcpServers"] != nil)
+    #expect(logger.infoMessages.contains { $0.contains("Backfilled missing config keys") })
+}
+
+@Test func loadDoesNotModifyConfigFileWhenAllKeysPresent() throws {
+    let (directory, configPath, cleanup) = makeTempConfigDir()
+    defer { cleanup() }
+
+    try ConfigurationLoader.defaultConfigJSON.write(toFile: configPath, atomically: true, encoding: .utf8)
+
+    let originalData = try Data(contentsOf: URL(fileURLWithPath: configPath))
+
+    let logger = MockLogger()
+    let loader = ConfigurationLoader(
+        logger: logger,
+        defaultConfigDirectory: directory,
+        defaultConfigPath: configPath
+    )
+
+    _ = try loader.load(from: nil)
+
+    #expect(!logger.infoMessages.contains { $0.contains("Backfilled missing config keys") })
+    let updatedData = try Data(contentsOf: URL(fileURLWithPath: configPath))
+    let originalJSON = try JSONSerialization.jsonObject(with: originalData) as? [String: Any]
+    let updatedJSON = try JSONSerialization.jsonObject(with: updatedData) as? [String: Any]
+    #expect((originalJSON?.keys.sorted()) == (updatedJSON?.keys.sorted()))
+}
+
+@Test func loadBackfillsOnlyMissingKeys() throws {
+    let (directory, configPath, cleanup) = makeTempConfigDir()
+    defer { cleanup() }
+
+    let partialJSON = """
+    {
+      "mcpServers": {},
+      "allowedCliTools": ["mytool"],
+      "bodyLimitMiB": 8,
+      "excludedFilePatterns": [],
+      "autoApprovePermissions": true
+    }
+    """
+    try partialJSON.write(toFile: configPath, atomically: true, encoding: .utf8)
+
+    let logger = MockLogger()
+    let loader = ConfigurationLoader(
+        logger: logger,
+        defaultConfigDirectory: directory,
+        defaultConfigPath: configPath
+    )
+
+    let config = try loader.load(from: nil)
+
+    #expect(config.allowedCliTools == ["mytool"])
+    #expect(config.bodyLimitMiB == 8)
+    #expect(config.maxAgentLoopIterations == 40)
+
+    let updatedData = try Data(contentsOf: URL(fileURLWithPath: configPath))
+    let updatedJSON = try JSONSerialization.jsonObject(with: updatedData) as? [String: Any]
+    #expect(updatedJSON?["maxAgentLoopIterations"] != nil)
+    #expect(updatedJSON?["timeouts"] != nil)
+    #expect(updatedJSON?["reasoningEffort"] != nil)
+}

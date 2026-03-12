@@ -103,6 +103,8 @@ public struct ConfigurationLoader: ConfigurationLoaderProtocol {
 
         try validate(configuration)
 
+        backfillMissingKeys(in: data, at: configPath)
+
         let configDir = URL(fileURLWithPath: configPath).deletingLastPathComponent().path
         let resolved = resolveServerPaths(in: configuration, configDir: configDir)
 
@@ -183,6 +185,35 @@ public struct ConfigurationLoader: ConfigurationLoaderProtocol {
             timeouts: configuration.timeouts,
             maxAgentLoopIterations: configuration.maxAgentLoopIterations
         )
+    }
+
+    private func backfillMissingKeys(in existingData: Data, at configPath: String) {
+        guard
+            let existingJSON = try? JSONSerialization.jsonObject(with: existingData) as? [String: Any],
+            let defaultData = Self.defaultConfigJSON.data(using: .utf8),
+            let defaultJSON = try? JSONSerialization.jsonObject(with: defaultData) as? [String: Any]
+        else { return }
+
+        var missingKeys: [String] = []
+        var merged = existingJSON
+
+        for (key, defaultValue) in defaultJSON where existingJSON[key] == nil {
+            merged[key] = defaultValue
+            missingKeys.append(key)
+        }
+
+        guard !missingKeys.isEmpty else { return }
+
+        do {
+            let updatedData = try JSONSerialization.data(
+                withJSONObject: merged,
+                options: [.prettyPrinted, .sortedKeys]
+            )
+            try updatedData.write(to: URL(fileURLWithPath: configPath), options: .atomic)
+            logger.info("Backfilled missing config keys with defaults: \(missingKeys.sorted().joined(separator: ", "))")
+        } catch {
+            logger.warn("Failed to backfill missing config keys: \(error)")
+        }
     }
 
     private func validate(_ configuration: ServerConfiguration) throws {
