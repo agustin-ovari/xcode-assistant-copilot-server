@@ -1127,6 +1127,8 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
     let (directory, configPath, cleanup) = makeTempConfigDir()
     defer { cleanup() }
 
+    try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+
     let partialJSON = """
     {
       "mcpServers": {},
@@ -1161,6 +1163,7 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
     let (directory, configPath, cleanup) = makeTempConfigDir()
     defer { cleanup() }
 
+    try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
     try ConfigurationLoader.defaultConfigJSON.write(toFile: configPath, atomically: true, encoding: .utf8)
 
     let originalData = try Data(contentsOf: URL(fileURLWithPath: configPath))
@@ -1184,6 +1187,8 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
 @Test func loadBackfillsOnlyMissingKeys() throws {
     let (directory, configPath, cleanup) = makeTempConfigDir()
     defer { cleanup() }
+
+    try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
 
     let partialJSON = """
     {

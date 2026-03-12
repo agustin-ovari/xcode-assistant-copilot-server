@@ -186,7 +186,7 @@ public struct CopilotAPIService: CopilotAPIServiceProtocol {
             logger.error("Copilot API error response (HTTP \(response.statusCode)), body length=\(body.count) chars")
             logger.error("Copilot API error body: \(body)")
             if let data = body.data(using: .utf8) {
-                logger.error("Copilot API error body (pretty-printed):\n\(data.prettyPrintedJSON)")
+                logger.debug("Copilot API error body (pretty-printed):\n\(data.prettyPrintedJSON)")
             }
             throw CopilotAPIError.requestFailed(statusCode: response.statusCode, body: body)
         }
