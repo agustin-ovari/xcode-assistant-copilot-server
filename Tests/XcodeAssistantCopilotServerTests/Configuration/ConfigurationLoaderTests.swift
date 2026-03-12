@@ -106,6 +106,7 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
     #expect(config.timeouts.requestTimeoutSeconds == 300)
     #expect(config.timeouts.streamingEndpointTimeoutSeconds == 300)
     #expect(config.timeouts.httpClientTimeoutSeconds == 300)
+    #expect(config.maxAgentLoopIterations == 40)
 }
 
 @Test func loadCreatesDefaultConfigDirectoryIfMissing() throws {
@@ -738,6 +739,7 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
     #expect(config.timeouts.requestTimeoutSeconds == 300)
     #expect(config.timeouts.streamingEndpointTimeoutSeconds == 300)
     #expect(config.timeouts.httpClientTimeoutSeconds == 300)
+    #expect(config.maxAgentLoopIterations == 40)
 }
 
 @Test func serverConfigurationBodyLimitBytesCalculation() {
@@ -1023,6 +1025,58 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
     #expect(config.timeouts.requestTimeoutSeconds == 300)
     #expect(config.timeouts.streamingEndpointTimeoutSeconds == 300)
     #expect(config.timeouts.httpClientTimeoutSeconds == 300)
+}
+
+@Test func serverConfigurationDefaultMaxAgentLoopIterationsIs40() {
+    let config = ServerConfiguration()
+    #expect(config.maxAgentLoopIterations == 40)
+}
+
+@Test func loadParsesMaxAgentLoopIterationsFromConfig() throws {
+    let logger = MockLogger()
+    let loader = ConfigurationLoader(logger: logger)
+
+    let json = """
+    {
+        "mcpServers": {},
+        "allowedCliTools": [],
+        "bodyLimitMiB": 4,
+        "excludedFilePatterns": [],
+        "autoApprovePermissions": true,
+        "maxAgentLoopIterations": 100
+    }
+    """
+
+    let tempPath = FileManager.default.temporaryDirectory
+        .appendingPathComponent("test_max_iterations_\(UUID().uuidString).json")
+    try json.write(to: tempPath, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: tempPath) }
+
+    let config = try loader.load(from: tempPath.path)
+    #expect(config.maxAgentLoopIterations == 100)
+}
+
+@Test func loadUsesDefaultMaxAgentLoopIterationsWhenNotSpecifiedInConfig() throws {
+    let logger = MockLogger()
+    let loader = ConfigurationLoader(logger: logger)
+
+    let json = """
+    {
+        "mcpServers": {},
+        "allowedCliTools": [],
+        "bodyLimitMiB": 4,
+        "excludedFilePatterns": [],
+        "autoApprovePermissions": true
+    }
+    """
+
+    let tempPath = FileManager.default.temporaryDirectory
+        .appendingPathComponent("test_max_iterations_default_\(UUID().uuidString).json")
+    try json.write(to: tempPath, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: tempPath) }
+
+    let config = try loader.load(from: tempPath.path)
+    #expect(config.maxAgentLoopIterations == 40)
 }
 
 @Test func loadParsesBodyLimitBoundaryValues() throws {

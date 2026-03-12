@@ -13,7 +13,6 @@ public struct ChatCompletionsHandler: Sendable {
     private let configuration: ServerConfiguration
     private let logger: LoggerProtocol
 
-    private static let maxAgentLoopIterations = 20
     private static let maxReasoningEffortRetries = 3
 
     public init(
@@ -217,7 +216,7 @@ public struct ChatCompletionsHandler: Sendable {
         writer.writeRoleDelta()
 
 
-        while iteration < Self.maxAgentLoopIterations {
+        while iteration < configuration.maxAgentLoopIterations {
             guard !Task.isCancelled else {
                 logger.debug("Agent loop cancelled before iteration \(iteration + 1)")
                 writer.finish()
@@ -352,7 +351,7 @@ public struct ChatCompletionsHandler: Sendable {
             }
         }
 
-        logger.warn("Agent loop hit maximum iterations (\(Self.maxAgentLoopIterations))")
+        logger.warn("Agent loop hit maximum iterations (\(configuration.maxAgentLoopIterations))")
         writer.writeFinalContent("", toolCalls: nil, hadToolUse: hadToolUse)
         writer.finish()
     }

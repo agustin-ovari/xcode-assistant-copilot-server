@@ -148,6 +148,7 @@ public struct ServerConfiguration: Codable, Sendable {
     public let reasoningEffort: ReasoningEffort?
     public let autoApprovePermissions: AutoApprovePermissions
     public let timeouts: TimeoutsConfiguration
+    public let maxAgentLoopIterations: Int
 
     public init(
         mcpServers: [String: MCPServerConfiguration] = [:],
@@ -156,7 +157,8 @@ public struct ServerConfiguration: Codable, Sendable {
         excludedFilePatterns: [String] = [],
         reasoningEffort: ReasoningEffort? = .xhigh,
         autoApprovePermissions: AutoApprovePermissions = .kinds([.read, .mcp]),
-        timeouts: TimeoutsConfiguration = TimeoutsConfiguration()
+        timeouts: TimeoutsConfiguration = TimeoutsConfiguration(),
+        maxAgentLoopIterations: Int = 40
     ) {
         self.mcpServers = mcpServers
         self.allowedCliTools = allowedCliTools
@@ -165,6 +167,7 @@ public struct ServerConfiguration: Codable, Sendable {
         self.reasoningEffort = reasoningEffort
         self.autoApprovePermissions = autoApprovePermissions
         self.timeouts = timeouts
+        self.maxAgentLoopIterations = maxAgentLoopIterations
     }
 
     public init(from decoder: Decoder) throws {
@@ -176,6 +179,7 @@ public struct ServerConfiguration: Codable, Sendable {
         reasoningEffort = try container.decodeIfPresent(ReasoningEffort.self, forKey: .reasoningEffort)
         autoApprovePermissions = try container.decode(AutoApprovePermissions.self, forKey: .autoApprovePermissions)
         timeouts = try container.decodeIfPresent(TimeoutsConfiguration.self, forKey: .timeouts) ?? TimeoutsConfiguration()
+        maxAgentLoopIterations = try container.decodeIfPresent(Int.self, forKey: .maxAgentLoopIterations) ?? 40
     }
 
     public var bodyLimitBytes: Int {

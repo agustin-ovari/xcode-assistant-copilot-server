@@ -54,7 +54,8 @@ public struct ConfigurationLoader: ConfigurationLoaderProtocol {
             "requestTimeoutSeconds": 300,
             "streamingEndpointTimeoutSeconds": 300,
             "httpClientTimeoutSeconds": 300
-          }
+          },
+          "maxAgentLoopIterations": 40
         }
         """
 
@@ -179,7 +180,8 @@ public struct ConfigurationLoader: ConfigurationLoaderProtocol {
             excludedFilePatterns: configuration.excludedFilePatterns,
             reasoningEffort: configuration.reasoningEffort,
             autoApprovePermissions: configuration.autoApprovePermissions,
-            timeouts: configuration.timeouts
+            timeouts: configuration.timeouts,
+            maxAgentLoopIterations: configuration.maxAgentLoopIterations
         )
     }
 
