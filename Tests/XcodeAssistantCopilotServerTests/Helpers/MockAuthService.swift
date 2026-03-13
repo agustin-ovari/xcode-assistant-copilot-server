@@ -1,32 +1,62 @@
 @testable import XcodeAssistantCopilotServer
+import Synchronization
 
-final class MockAuthService: AuthServiceProtocol, @unchecked Sendable {
-    var token: String = "mock-github-token"
-    var credentials: CopilotCredentials = CopilotCredentials(
-        token: "mock-copilot-token",
-        apiEndpoint: "https://api.github.com"
-    )
-    var credentialsSequence: [CopilotCredentials] = []
-    var shouldThrow: Error?
-    private(set) var invalidateCallCount = 0
-    private(set) var getValidCopilotTokenCallCount = 0
+final class MockAuthService: AuthServiceProtocol, Sendable {
+    private struct State {
+        var token: String = "mock-github-token"
+        var credentials: CopilotCredentials = CopilotCredentials(
+            token: "mock-copilot-token",
+            apiEndpoint: "https://api.github.com"
+        )
+        var credentialsSequence: [CopilotCredentials] = []
+        var shouldThrow: Error?
+        var invalidateCallCount: Int = 0
+        var getValidCopilotTokenCallCount: Int = 0
+    }
+
+    private let mutex = Mutex(State())
+
+    var token: String {
+        get { mutex.withLock { $0.token } }
+        set { mutex.withLock { $0.token = newValue } }
+    }
+
+    var credentials: CopilotCredentials {
+        get { mutex.withLock { $0.credentials } }
+        set { mutex.withLock { $0.credentials = newValue } }
+    }
+
+    var credentialsSequence: [CopilotCredentials] {
+        get { mutex.withLock { $0.credentialsSequence } }
+        set { mutex.withLock { $0.credentialsSequence = newValue } }
+    }
+
+    var shouldThrow: Error? {
+        get { mutex.withLock { $0.shouldThrow } }
+        set { mutex.withLock { $0.shouldThrow = newValue } }
+    }
+
+    var invalidateCallCount: Int { mutex.withLock { $0.invalidateCallCount } }
+    var getValidCopilotTokenCallCount: Int { mutex.withLock { $0.getValidCopilotTokenCallCount } }
 
     func getGitHubToken() async throws -> String {
-        if let error = shouldThrow { throw error }
-        return token
+        if let error = mutex.withLock({ $0.shouldThrow }) { throw error }
+        return mutex.withLock { $0.token }
     }
 
     func getValidCopilotToken() async throws -> CopilotCredentials {
-        if let error = shouldThrow { throw error }
-        let index = getValidCopilotTokenCallCount
-        getValidCopilotTokenCallCount += 1
-        if index < credentialsSequence.count {
-            return credentialsSequence[index]
+        if let error = mutex.withLock({ $0.shouldThrow }) { throw error }
+        return mutex.withLock {
+            let index = $0.getValidCopilotTokenCallCount
+            $0.getValidCopilotTokenCallCount += 1
+            if index < $0.credentialsSequence.count {
+                return $0.credentialsSequence[index]
+            }
+            return $0.credentials
         }
-        return credentials
     }
 
     func invalidateCachedToken() async {
-        invalidateCallCount += 1
+        mutex.withLock { $0.invalidateCallCount += 1 }
     }
 }

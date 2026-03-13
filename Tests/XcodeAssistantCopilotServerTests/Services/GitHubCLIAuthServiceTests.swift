@@ -32,21 +32,41 @@ private struct MockAuthProcessRunner: ProcessRunnerProtocol {
     }
 }
 
-private final class MockDeviceFlowService: DeviceFlowServiceProtocol, @unchecked Sendable {
-    var storedToken: OAuthToken?
-    var performDeviceFlowResult: Result<OAuthToken, Error> = .failure(DeviceFlowError.expired)
-    var performDeviceFlowCallCount = 0
-    var deleteStoredTokenCallCount = 0
+private final class MockDeviceFlowService: DeviceFlowServiceProtocol, Sendable {
+    private struct State {
+        var storedToken: OAuthToken?
+        var performDeviceFlowResult: Result<OAuthToken, Error> = .failure(DeviceFlowError.expired)
+        var performDeviceFlowCallCount = 0
+        var deleteStoredTokenCallCount = 0
+    }
+
+    private let mutex = Mutex(State())
+
+    var storedToken: OAuthToken? {
+        get { mutex.withLock { $0.storedToken } }
+        set { mutex.withLock { $0.storedToken = newValue } }
+    }
+
+    var performDeviceFlowResult: Result<OAuthToken, Error> {
+        get { mutex.withLock { $0.performDeviceFlowResult } }
+        set { mutex.withLock { $0.performDeviceFlowResult = newValue } }
+    }
+
+    var performDeviceFlowCallCount: Int { mutex.withLock { $0.performDeviceFlowCallCount } }
+    var deleteStoredTokenCallCount: Int { mutex.withLock { $0.deleteStoredTokenCallCount } }
 
     func loadStoredToken() throws -> OAuthToken? {
-        storedToken
+        mutex.withLock { $0.storedToken }
     }
 
     func performDeviceFlow() async throws -> OAuthToken {
-        performDeviceFlowCallCount += 1
-        switch performDeviceFlowResult {
+        let result = mutex.withLock { state -> Result<OAuthToken, Error> in
+            state.performDeviceFlowCallCount += 1
+            return state.performDeviceFlowResult
+        }
+        switch result {
         case .success(let token):
-            storedToken = token
+            mutex.withLock { $0.storedToken = token }
             return token
         case .failure(let error):
             throw error
@@ -54,12 +74,12 @@ private final class MockDeviceFlowService: DeviceFlowServiceProtocol, @unchecked
     }
 
     func deleteStoredToken() throws {
-        deleteStoredTokenCallCount += 1
-        storedToken = nil
+        mutex.withLock {
+            $0.deleteStoredTokenCallCount += 1
+            $0.storedToken = nil
+        }
     }
 }
-
-// MARK: - getGitHubToken
 
 @Test func getGitHubTokenReturnsStoredOAuthTokenFirst() async throws {
     let runner = MockAuthProcessRunner(handler: { path, args, _ in
@@ -272,8 +292,6 @@ private final class MockDeviceFlowService: DeviceFlowServiceProtocol, @unchecked
     #expect(!ghAuthTokenCalled.withLock { $0 })
 }
 
-// MARK: - getValidCopilotToken
-
 @Test func getValidCopilotTokenCachesToken() async throws {
     let tokenJSON = """
     {"token":"cached-token","expires_at":\(Int(Date.now.timeIntervalSince1970) + 3600),"endpoints":{"api":"https://api.endpoint.com"}}
@@ -475,8 +493,6 @@ private final class MockDeviceFlowService: DeviceFlowServiceProtocol, @unchecked
     }
 }
 
-// MARK: - invalidateCachedToken
-
 @Test func invalidateCachedTokenForcesRefreshOnNextCall() async throws {
     let tokenJSON1 = """
     {"token":"token-1","expires_at":\(Int(Date.now.timeIntervalSince1970) + 3600),"endpoints":{"api":"https://api.endpoint1.com"}}
@@ -515,8 +531,6 @@ private final class MockDeviceFlowService: DeviceFlowServiceProtocol, @unchecked
     #expect(httpClient.executeCallCount == 2)
     #expect(logger.debugMessages.contains { $0.contains("Cached Copilot token invalidated") })
 }
-
-// MARK: - retryingOnUnauthorized
 
 @Test func retryingOnUnauthorizedReturnsResultOnSuccess() async throws {
     let authService = MockAuthService()
@@ -600,8 +614,6 @@ private final class MockDeviceFlowService: DeviceFlowServiceProtocol, @unchecked
     #expect(authService.invalidateCallCount == 0)
 }
 
-// MARK: - AuthServiceError descriptions
-
 @Test func authServiceErrorGitHubCLINotFoundDescription() {
     let error = AuthServiceError.gitHubCLINotFound
     #expect(error.description == "GitHub CLI (gh) not found. Install it from https://cli.github.com")
@@ -636,8 +648,6 @@ private final class MockDeviceFlowService: DeviceFlowServiceProtocol, @unchecked
     _ = service
 }
 
-// MARK: - DeviceFlowError descriptions
-
 @Test func deviceFlowErrorDescriptions() {
     let expired = DeviceFlowError.expired
     #expect(expired.description.contains("expired"))
@@ -657,8 +667,6 @@ private final class MockDeviceFlowService: DeviceFlowServiceProtocol, @unchecked
     let request = DeviceFlowError.requestFailed("HTTP 500")
     #expect(request.description.contains("HTTP 500"))
 }
-
-// MARK: - OAuthToken / DeviceCodeResponse codable
 
 @Test func oauthTokenEncodesAndDecodes() throws {
     let original = OAuthToken(accessToken: "gho_test123", tokenType: "bearer", scope: "user:email")
@@ -724,8 +732,6 @@ private final class MockDeviceFlowService: DeviceFlowServiceProtocol, @unchecked
     let response = try JSONDecoder().decode(DeviceCodePollResponse.self, from: json)
     #expect(response.toOAuthToken() == nil)
 }
-
-// MARK: - MockDeviceFlowService helpers
 
 @Test func mockDeviceFlowServicePerformDeviceFlowIncrementsCallCount() async throws {
     let deviceFlow = MockDeviceFlowService()

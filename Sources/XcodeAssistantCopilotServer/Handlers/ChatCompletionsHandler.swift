@@ -10,7 +10,7 @@ public struct ChatCompletionsHandler: Sendable {
     private let modelEndpointResolver: ModelEndpointResolverProtocol
     private let reasoningEffortResolver: ReasoningEffortResolverProtocol
     private let responsesTranslator: ResponsesAPITranslator
-    private let configuration: ServerConfiguration
+    private let configurationStore: ConfigurationStore
     private let logger: LoggerProtocol
 
     private static let maxReasoningEffortRetries = 3
@@ -21,7 +21,7 @@ public struct ChatCompletionsHandler: Sendable {
         mcpBridge: MCPBridgeServiceProtocol?,
         modelEndpointResolver: ModelEndpointResolverProtocol,
         reasoningEffortResolver: ReasoningEffortResolverProtocol,
-        configuration: ServerConfiguration,
+        configurationStore: ConfigurationStore,
         logger: LoggerProtocol
     ) {
         self.authService = authService
@@ -30,11 +30,12 @@ public struct ChatCompletionsHandler: Sendable {
         self.modelEndpointResolver = modelEndpointResolver
         self.reasoningEffortResolver = reasoningEffortResolver
         self.responsesTranslator = ResponsesAPITranslator(logger: logger)
-        self.configuration = configuration
+        self.configurationStore = configurationStore
         self.logger = logger
     }
 
     public func handle(request: Request) async throws -> Response {
+        let configuration = await configurationStore.current()
         // consumeWithCancellationOnInboundClose monitors the inbound TCP stream.
         // When Xcode hits Stop it closes the connection, which closes the inbound
         // stream and throws CancellationError into the task running this closure,
@@ -42,7 +43,7 @@ public struct ChatCompletionsHandler: Sendable {
         // executeMCPTool, Task.sleep, etc.).
         do {
             return try await request.body.consumeWithCancellationOnInboundClose { body in
-            let bodyBuffer = try await body.collect(upTo: self.configuration.bodyLimitBytes)
+            let bodyBuffer = try await body.collect(upTo: configuration.bodyLimitBytes)
 
             let completionRequest: ChatCompletionRequest
             do {
@@ -69,9 +70,9 @@ public struct ChatCompletionsHandler: Sendable {
             }
 
             if self.mcpBridge != nil {
-                return await self.handleAgentStreaming(request: completionRequest, credentials: credentials)
+                return await self.handleAgentStreaming(request: completionRequest, credentials: credentials, configuration: configuration)
             } else {
-                return await self.handleDirectStreaming(request: completionRequest, credentials: credentials)
+                return await self.handleDirectStreaming(request: completionRequest, credentials: credentials, configuration: configuration)
             }
         }
         } catch is CancellationError {
@@ -81,7 +82,12 @@ public struct ChatCompletionsHandler: Sendable {
     }
 
     func handleDirectStreaming(request: ChatCompletionRequest, credentials: CopilotCredentials) async -> Response {
-        let copilotRequest = buildCopilotRequest(from: request)
+        let configuration = await configurationStore.current()
+        return await handleDirectStreaming(request: request, credentials: credentials, configuration: configuration)
+    }
+
+    private func handleDirectStreaming(request: ChatCompletionRequest, credentials: CopilotCredentials, configuration: ServerConfiguration) async -> Response {
+        let copilotRequest = buildCopilotRequest(from: request, configuration: configuration)
 
         let eventStream: AsyncThrowingStream<SSEEvent, Error>
         do {
@@ -98,7 +104,7 @@ public struct ChatCompletionsHandler: Sendable {
             let task = Task {
                 do {
                     try await withThrowingTaskGroup(of: Void.self) { group in
-                        group.addTask {
+                        group.addTask { [configuration] in
                             try await Task.sleep(for: .seconds(configuration.timeouts.requestTimeoutSeconds))
                             throw ChatCompletionsHandlerError.timeout
                         }
@@ -153,6 +159,11 @@ public struct ChatCompletionsHandler: Sendable {
     }
 
     func handleAgentStreaming(request: ChatCompletionRequest, credentials: CopilotCredentials) async -> Response {
+        let configuration = await configurationStore.current()
+        return await handleAgentStreaming(request: request, credentials: credentials, configuration: configuration)
+    }
+
+    private func handleAgentStreaming(request: ChatCompletionRequest, credentials: CopilotCredentials, configuration: ServerConfiguration) async -> Response {
         let completionId = ChatCompletionChunk.makeCompletionId()
         let model = request.model
 
@@ -188,7 +199,8 @@ public struct ChatCompletionsHandler: Sendable {
                     credentials: credentials,
                     allTools: frozenTools,
                     mcpToolNames: frozenMCPToolNames,
-                    writer: writer
+                    writer: writer,
+                    configuration: configuration
                 )
             }
 
@@ -206,6 +218,25 @@ public struct ChatCompletionsHandler: Sendable {
         allTools: [Tool],
         mcpToolNames: Set<String>,
         writer: some AgentStreamWriterProtocol
+    ) async {
+        let configuration = await configurationStore.current()
+        await runAgentLoop(
+            request: request,
+            credentials: credentials,
+            allTools: allTools,
+            mcpToolNames: mcpToolNames,
+            writer: writer,
+            configuration: configuration
+        )
+    }
+
+    private func runAgentLoop(
+        request: ChatCompletionRequest,
+        credentials: CopilotCredentials,
+        allTools: [Tool],
+        mcpToolNames: Set<String>,
+        writer: some AgentStreamWriterProtocol,
+        configuration: ServerConfiguration
     ) async {
         let formatter = AgentProgressFormatter()
         var messages = request.messages
@@ -286,7 +317,7 @@ public struct ChatCompletionsHandler: Sendable {
 
                         let toolResult: String
                         do {
-                            toolResult = try await executeMCPTool(toolCall: toolCall)
+                            toolResult = try await executeMCPTool(toolCall: toolCall, configuration: configuration)
                         } catch is CancellationError {
                             logger.debug("Agent loop cancelled during MCP tool execution")
                             writer.finish()
@@ -412,6 +443,11 @@ public struct ChatCompletionsHandler: Sendable {
     }
 
     func executeMCPTool(toolCall: ToolCall) async throws -> String {
+        let configuration = await configurationStore.current()
+        return try await executeMCPTool(toolCall: toolCall, configuration: configuration)
+    }
+
+    private func executeMCPTool(toolCall: ToolCall, configuration: ServerConfiguration) async throws -> String {
         guard let mcpBridge else {
             return "Error: MCP bridge not available"
         }
@@ -533,7 +569,7 @@ public struct ChatCompletionsHandler: Sendable {
         }
     }
 
-    private func buildCopilotRequest(from request: ChatCompletionRequest) -> CopilotChatRequest {
+    private func buildCopilotRequest(from request: ChatCompletionRequest, configuration: ServerConfiguration) -> CopilotChatRequest {
         let tempStr = request.temperature.map { "\($0)" } ?? "nil"
         let topPStr = request.topP.map { "\($0)" } ?? "nil"
         let maxTokensStr = request.maxTokens.map { "\($0)" } ?? "nil"

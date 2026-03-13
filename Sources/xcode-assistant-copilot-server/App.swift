@@ -1,4 +1,5 @@
 import ArgumentParser
+import Darwin
 import XcodeAssistantCopilotServer
 
 @main
@@ -41,6 +42,12 @@ struct App: AsyncParsableCommand {
             throw ExitCode.failure
         }
 
+        let configurationStore = ConfigurationStore(initial: configuration)
+
+        let watchPath = config ?? ConfigurationLoader.productionConfigPath
+        let watcher = ConfigurationWatcher(path: watchPath, loader: configLoader, logger: logger)
+        await watcher.start()
+
         let pidFile = MCPBridgePIDFile()
         let orphanCleaner = OrphanedProcessCleaner(pidFile: pidFile, logger: logger)
         orphanCleaner.cleanupIfNeeded()
@@ -75,7 +82,7 @@ struct App: AsyncParsableCommand {
         let copilotAPI = CopilotAPIService(
             httpClient: httpClient,
             logger: logger,
-            streamingEndpointTimeout: configuration.timeouts.streamingEndpointTimeoutSeconds
+            configurationStore: configurationStore
         )
 
         var mcpBridge: MCPBridgeServiceProtocol?
@@ -103,10 +110,12 @@ struct App: AsyncParsableCommand {
             }
         }
 
+        let bridgeHolder = MCPBridgeHolder(mcpBridge)
+
         let signalHandler = SignalHandler(logger: logger)
-        if let bridge = mcpBridge as? MCPBridgeService {
-            signalHandler.monitorSignals { signal in
-                logger.info("Stopping MCP bridge due to signal \(signal)...")
+        signalHandler.monitorSignals { signal in
+            logger.info("Stopping MCP bridge due to signal \(signal)...")
+            if let bridge = await bridgeHolder.bridge as? MCPBridgeService {
                 try? await bridge.stop()
             }
         }
@@ -114,22 +123,108 @@ struct App: AsyncParsableCommand {
         let server = CopilotServer(
             port: port,
             logger: logger,
-            configuration: configuration,
+            configurationStore: configurationStore,
             authService: authService,
             copilotAPI: copilotAPI,
-            mcpBridge: mcpBridge
+            mcpBridge: await bridgeHolder.bridge
         )
 
-        do {
-            try await server.run()
-        } catch {
-            logger.error("Server error: \(error)")
+        // The task group uses Bool to identify which task completed first.
+        // The server task returns true; the watcher task returns false.
+        // As soon as the server exits (signal or error) we stop the watcher
+        // and cancel all remaining tasks so the process can exit cleanly.
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                do {
+                    try await server.run()
+                } catch {
+                    logger.error("Server error: \(error)")
+                }
+                return true
+            }
+
+            group.addTask {
+                let configStream = await watcher.changes()
+                for await newConfig in configStream {
+                    let decision = ConfigurationReloadDecision.decide(
+                        from: await configurationStore.current(),
+                        to: newConfig
+                    )
+                    switch decision {
+                    case .hotReload(let updated):
+                        await configurationStore.update(updated)
+                        logger.info("Configuration hot-reloaded successfully")
+
+                    case .mcpRestart(let updated):
+                        logger.info("MCP servers changed — restarting MCP bridge...")
+
+                        if let bridge = await bridgeHolder.bridge as? MCPBridgeService {
+                            try? await bridge.stop()
+                            await bridgeHolder.setBridge(nil)
+                        }
+
+                        if let (_, serverConfig) = updated.mcpServers.first(where: {
+                            $0.value.type == .local || $0.value.type == .stdio
+                        }) {
+                            let newBridge = MCPBridgeService(
+                                serverConfig: serverConfig,
+                                logger: logger,
+                                pidFile: pidFile,
+                                clientName: App.configuration.commandName ?? "xcode-assistant-copilot-server",
+                                clientVersion: appVersion
+                            )
+                            do {
+                                try await newBridge.start()
+                                await bridgeHolder.setBridge(newBridge)
+                                await configurationStore.update(updated)
+                                logger.info("MCP bridge restarted successfully")
+                            } catch {
+                                logger.warn("MCP bridge failed to restart: \(error)")
+                                logger.warn("Continuing without MCP support")
+                                await bridgeHolder.setBridge(nil)
+                                await configurationStore.update(updated)
+                            }
+                        } else {
+                            await configurationStore.update(updated)
+                        }
+
+                    case .requiresManualRestart(let reason):
+                        logger.error("Configuration change requires a manual restart: \(reason)")
+                        logger.error("Stopping server. Please restart to apply the new configuration.")
+                        Darwin.exit(0)
+                    }
+                }
+                return false
+            }
+
+            // Drain completed tasks. The moment the server task finishes
+            // (true), stop the watcher — which finishes its stream — then
+            // cancel any tasks still running.
+            for await isServerTask in group {
+                if isServerTask {
+                    await watcher.stop()
+                    group.cancelAll()
+                    break
+                }
+            }
         }
 
-        if let bridge = mcpBridge as? MCPBridgeService {
+        if let bridge = await bridgeHolder.bridge as? MCPBridgeService {
             logger.info("Stopping MCP bridge...")
             try? await bridge.stop()
             logger.info("MCP bridge stopped")
         }
+    }
+}
+
+actor MCPBridgeHolder {
+    private(set) var bridge: MCPBridgeServiceProtocol?
+
+    init(_ bridge: MCPBridgeServiceProtocol?) {
+        self.bridge = bridge
+    }
+
+    func setBridge(_ bridge: MCPBridgeServiceProtocol?) {
+        self.bridge = bridge
     }
 }

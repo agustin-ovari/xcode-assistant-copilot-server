@@ -26,12 +26,12 @@ public struct ConfigurationLoader: ConfigurationLoaderProtocol {
     private let defaultConfigDirectory: String
     private let defaultConfigPath: String
 
-    static let productionConfigDirectory: String = {
+    public static let productionConfigDirectory: String = {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/.config/xcode-assistant-copilot-server"
     }()
 
-    static let productionConfigPath: String = {
+    public static let productionConfigPath: String = {
         "\(productionConfigDirectory)/config.json"
     }()
 

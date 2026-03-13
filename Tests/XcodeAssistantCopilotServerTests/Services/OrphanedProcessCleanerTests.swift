@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import XcodeAssistantCopilotServer
@@ -83,40 +84,73 @@ struct OrphanedProcessCleanerTests {
     }
 }
 
-final class MockMCPBridgePIDFile: MCPBridgePIDFileProtocol, @unchecked Sendable {
-    var storedPID: Int32?
-    var processRunning: Bool = false
-    var processBecomesDeadAfterCheck: Int = 0
+final class MockMCPBridgePIDFile: MCPBridgePIDFileProtocol, Sendable {
+    private struct State {
+        var storedPID: Int32?
+        var processRunning: Bool = false
+        var processBecomesDeadAfterCheck: Int = 0
+        var writeCallCount = 0
+        var writtenPID: Int32?
+        var readCallCount = 0
+        var removeCallCount = 0
+        var isProcessRunningCallCount = 0
+        var isProcessRunningReceivedPID: Int32?
+    }
 
-    private(set) var writeCallCount = 0
-    private(set) var writtenPID: Int32?
-    private(set) var readCallCount = 0
-    private(set) var removeCallCount = 0
-    private(set) var isProcessRunningCallCount = 0
-    private(set) var isProcessRunningReceivedPID: Int32?
+    private let mutex = Mutex(State())
+
+    var storedPID: Int32? {
+        get { mutex.withLock { $0.storedPID } }
+        set { mutex.withLock { $0.storedPID = newValue } }
+    }
+
+    var processRunning: Bool {
+        get { mutex.withLock { $0.processRunning } }
+        set { mutex.withLock { $0.processRunning = newValue } }
+    }
+
+    var processBecomesDeadAfterCheck: Int {
+        get { mutex.withLock { $0.processBecomesDeadAfterCheck } }
+        set { mutex.withLock { $0.processBecomesDeadAfterCheck = newValue } }
+    }
+
+    var writeCallCount: Int { mutex.withLock { $0.writeCallCount } }
+    var writtenPID: Int32? { mutex.withLock { $0.writtenPID } }
+    var readCallCount: Int { mutex.withLock { $0.readCallCount } }
+    var removeCallCount: Int { mutex.withLock { $0.removeCallCount } }
+    var isProcessRunningCallCount: Int { mutex.withLock { $0.isProcessRunningCallCount } }
+    var isProcessRunningReceivedPID: Int32? { mutex.withLock { $0.isProcessRunningReceivedPID } }
 
     func write(pid: Int32) throws {
-        writeCallCount += 1
-        writtenPID = pid
-        storedPID = pid
+        mutex.withLock {
+            $0.writeCallCount += 1
+            $0.writtenPID = pid
+            $0.storedPID = pid
+        }
     }
 
     func read() -> Int32? {
-        readCallCount += 1
-        return storedPID
+        mutex.withLock {
+            $0.readCallCount += 1
+            return $0.storedPID
+        }
     }
 
     func remove() {
-        removeCallCount += 1
-        storedPID = nil
+        mutex.withLock {
+            $0.removeCallCount += 1
+            $0.storedPID = nil
+        }
     }
 
     func isProcessRunning(pid: Int32) -> Bool {
-        isProcessRunningCallCount += 1
-        isProcessRunningReceivedPID = pid
-        if isProcessRunningCallCount > processBecomesDeadAfterCheck {
-            return false
+        mutex.withLock {
+            $0.isProcessRunningCallCount += 1
+            $0.isProcessRunningReceivedPID = pid
+            if $0.isProcessRunningCallCount > $0.processBecomesDeadAfterCheck {
+                return false
+            }
+            return $0.processRunning
         }
-        return processRunning
     }
 }

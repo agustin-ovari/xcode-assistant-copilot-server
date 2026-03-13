@@ -36,13 +36,13 @@ public struct CopilotAPIService: CopilotAPIServiceProtocol {
     private let httpClient: HTTPClientProtocol
     private let logger: LoggerProtocol
     private let sseParser: SSEParser
-    private let streamingEndpointTimeout: TimeInterval
+    private let configurationStore: ConfigurationStore
 
-    public init(httpClient: HTTPClientProtocol, logger: LoggerProtocol, streamingEndpointTimeout: TimeInterval = 300) {
+    public init(httpClient: HTTPClientProtocol, logger: LoggerProtocol, configurationStore: ConfigurationStore) {
         self.httpClient = httpClient
         self.logger = logger
         self.sseParser = SSEParser()
-        self.streamingEndpointTimeout = streamingEndpointTimeout
+        self.configurationStore = configurationStore
     }
 
     public func listModels(credentials: CopilotCredentials) async throws -> [CopilotModel] {
@@ -79,9 +79,10 @@ public struct CopilotAPIService: CopilotAPIServiceProtocol {
         request: CopilotChatRequest,
         credentials: CopilotCredentials
     ) async throws -> AsyncThrowingStream<SSEEvent, Error> {
+        let timeout = await configurationStore.current().timeouts.streamingEndpointTimeoutSeconds
         let endpoint: ChatCompletionsStreamEndpoint
         do {
-            endpoint = try ChatCompletionsStreamEndpoint(request: request, credentials: credentials, timeoutInterval: streamingEndpointTimeout)
+            endpoint = try ChatCompletionsStreamEndpoint(request: request, credentials: credentials, timeoutInterval: timeout)
         } catch {
             throw CopilotAPIError.streamingFailed("Failed to encode request body: \(error.localizedDescription)")
         }
@@ -111,9 +112,10 @@ public struct CopilotAPIService: CopilotAPIServiceProtocol {
         request: ResponsesAPIRequest,
         credentials: CopilotCredentials
     ) async throws -> AsyncThrowingStream<SSEEvent, Error> {
+        let timeout = await configurationStore.current().timeouts.streamingEndpointTimeoutSeconds
         let endpoint: ResponsesStreamEndpoint
         do {
-            endpoint = try ResponsesStreamEndpoint(request: request, credentials: credentials, timeoutInterval: streamingEndpointTimeout)
+            endpoint = try ResponsesStreamEndpoint(request: request, credentials: credentials, timeoutInterval: timeout)
         } catch {
             logger.error("Failed to encode responses request body: \(error)")
             throw CopilotAPIError.streamingFailed("Failed to encode responses request body: \(error.localizedDescription)")

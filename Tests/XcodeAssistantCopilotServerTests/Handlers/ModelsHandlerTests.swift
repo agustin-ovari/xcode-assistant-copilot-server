@@ -3,6 +3,7 @@ import Foundation
 import Hummingbird
 import HTTPTypes
 import NIOCore
+import Synchronization
 import Testing
 
 private func makeModelsHandler(
@@ -21,16 +22,26 @@ private func makeCredentials() -> CopilotCredentials {
     CopilotCredentials(token: "mock-token", apiEndpoint: "https://api.github.com")
 }
 
-private final class CollectedBuffers: @unchecked Sendable {
-    var buffers: [ByteBuffer] = []
+private final class CollectedBuffers: Sendable {
+    private struct State {
+        var buffers: [ByteBuffer] = []
+    }
+
+    private let mutex = Mutex(State())
 
     var collectedData: Data {
-        var combined = ByteBuffer()
-        for buf in buffers {
-            var copy = buf
-            combined.writeBuffer(&copy)
+        mutex.withLock { state in
+            var combined = ByteBuffer()
+            for buf in state.buffers {
+                var copy = buf
+                combined.writeBuffer(&copy)
+            }
+            return Data(buffer: combined)
         }
-        return Data(buffer: combined)
+    }
+
+    func append(_ buffer: ByteBuffer) {
+        mutex.withLock { $0.buffers.append(buffer) }
     }
 }
 
@@ -38,7 +49,7 @@ private struct CollectingBodyWriter: ResponseBodyWriter {
     let storage: CollectedBuffers
 
     mutating func write(_ buffer: ByteBuffer) async throws {
-        storage.buffers.append(buffer)
+        storage.append(buffer)
     }
 
     consuming func finish(_ trailingHeaders: HTTPFields?) async throws {}

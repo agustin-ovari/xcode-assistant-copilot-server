@@ -6,7 +6,7 @@ import NIOCore
 public struct CopilotServer: Sendable {
     private let port: Int
     private let logger: LoggerProtocol
-    private let configuration: ServerConfiguration
+    private let configurationStore: ConfigurationStore
     private let authService: AuthServiceProtocol
     private let copilotAPI: CopilotAPIServiceProtocol
     private let mcpBridge: MCPBridgeServiceProtocol?
@@ -14,14 +14,14 @@ public struct CopilotServer: Sendable {
     public init(
         port: Int,
         logger: LoggerProtocol,
-        configuration: ServerConfiguration,
+        configurationStore: ConfigurationStore,
         authService: AuthServiceProtocol,
         copilotAPI: CopilotAPIServiceProtocol,
         mcpBridge: MCPBridgeServiceProtocol? = nil
     ) {
         self.port = port
         self.logger = logger
-        self.configuration = configuration
+        self.configurationStore = configurationStore
         self.authService = authService
         self.copilotAPI = copilotAPI
         self.mcpBridge = mcpBridge
@@ -48,7 +48,7 @@ public struct CopilotServer: Sendable {
             mcpBridge: mcpBridge,
             modelEndpointResolver: modelEndpointResolver,
             reasoningEffortResolver: reasoningEffortResolver,
-            configuration: configuration,
+            configurationStore: configurationStore,
             logger: logger
         )
 

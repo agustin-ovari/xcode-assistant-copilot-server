@@ -1,50 +1,90 @@
 @testable import XcodeAssistantCopilotServer
+import Synchronization
 import Foundation
 
-final class MockCopilotAPIService: CopilotAPIServiceProtocol, @unchecked Sendable {
-    var models: [CopilotModel] = []
-    var listModelsResults: [Result<[CopilotModel], Error>] = []
-    var streamChatCompletionsResults: [Result<AsyncThrowingStream<SSEEvent, Error>, Error>] = []
-    var streamResponsesResults: [Result<AsyncThrowingStream<SSEEvent, Error>, Error>] = []
-    private(set) var listModelsCallCount = 0
-    private(set) var streamChatCompletionsCallCount = 0
-    private(set) var streamResponsesCallCount = 0
-    private(set) var capturedChatRequests: [CopilotChatRequest] = []
-    private(set) var capturedListModelsCredentials: [CopilotCredentials] = []
+final class MockCopilotAPIService: CopilotAPIServiceProtocol, Sendable {
+    private struct State {
+        var models: [CopilotModel] = []
+        var listModelsResults: [Result<[CopilotModel], Error>] = []
+        var streamChatCompletionsResults: [Result<AsyncThrowingStream<SSEEvent, Error>, Error>] = []
+        var streamResponsesResults: [Result<AsyncThrowingStream<SSEEvent, Error>, Error>] = []
+        var listModelsCallCount = 0
+        var streamChatCompletionsCallCount = 0
+        var streamResponsesCallCount = 0
+        var capturedChatRequests: [CopilotChatRequest] = []
+        var capturedListModelsCredentials: [CopilotCredentials] = []
+    }
+
+    private let mutex = Mutex(State())
+
+    var models: [CopilotModel] {
+        get { mutex.withLock { $0.models } }
+        set { mutex.withLock { $0.models = newValue } }
+    }
+
+    var listModelsResults: [Result<[CopilotModel], Error>] {
+        get { mutex.withLock { $0.listModelsResults } }
+        set { mutex.withLock { $0.listModelsResults = newValue } }
+    }
+
+    var streamChatCompletionsResults: [Result<AsyncThrowingStream<SSEEvent, Error>, Error>] {
+        get { mutex.withLock { $0.streamChatCompletionsResults } }
+        set { mutex.withLock { $0.streamChatCompletionsResults = newValue } }
+    }
+
+    var streamResponsesResults: [Result<AsyncThrowingStream<SSEEvent, Error>, Error>] {
+        get { mutex.withLock { $0.streamResponsesResults } }
+        set { mutex.withLock { $0.streamResponsesResults = newValue } }
+    }
+
+    var listModelsCallCount: Int { mutex.withLock { $0.listModelsCallCount } }
+    var streamChatCompletionsCallCount: Int { mutex.withLock { $0.streamChatCompletionsCallCount } }
+    var streamResponsesCallCount: Int { mutex.withLock { $0.streamResponsesCallCount } }
+    var capturedChatRequests: [CopilotChatRequest] { mutex.withLock { $0.capturedChatRequests } }
+    var capturedListModelsCredentials: [CopilotCredentials] { mutex.withLock { $0.capturedListModelsCredentials } }
 
     func listModels(credentials: CopilotCredentials) async throws -> [CopilotModel] {
-        let index = listModelsCallCount
-        listModelsCallCount += 1
-        capturedListModelsCredentials.append(credentials)
-        if index < listModelsResults.count {
-            return try listModelsResults[index].get()
+        let (result, fallback) = mutex.withLock { state -> (Result<[CopilotModel], Error>?, [CopilotModel]) in
+            let i = state.listModelsCallCount
+            state.listModelsCallCount += 1
+            state.capturedListModelsCredentials.append(credentials)
+            return (state.listModelsResults.indices.contains(i) ? state.listModelsResults[i] : nil, state.models)
         }
-        return models
+        if let result {
+            return try result.get()
+        }
+        return fallback
     }
 
     func streamChatCompletions(
         request: CopilotChatRequest,
         credentials: CopilotCredentials
     ) async throws -> AsyncThrowingStream<SSEEvent, Error> {
-        let index = streamChatCompletionsCallCount
-        streamChatCompletionsCallCount += 1
-        capturedChatRequests.append(request)
-        guard index < streamChatCompletionsResults.count else {
+        let result = mutex.withLock { state -> Result<AsyncThrowingStream<SSEEvent, Error>, Error>? in
+            let i = state.streamChatCompletionsCallCount
+            state.streamChatCompletionsCallCount += 1
+            state.capturedChatRequests.append(request)
+            return state.streamChatCompletionsResults.indices.contains(i) ? state.streamChatCompletionsResults[i] : nil
+        }
+        guard let result else {
             return AsyncThrowingStream { $0.finish() }
         }
-        return try streamChatCompletionsResults[index].get()
+        return try result.get()
     }
 
     func streamResponses(
         request: ResponsesAPIRequest,
         credentials: CopilotCredentials
     ) async throws -> AsyncThrowingStream<SSEEvent, Error> {
-        let index = streamResponsesCallCount
-        streamResponsesCallCount += 1
-        guard index < streamResponsesResults.count else {
+        let result = mutex.withLock { state -> Result<AsyncThrowingStream<SSEEvent, Error>, Error>? in
+            let i = state.streamResponsesCallCount
+            state.streamResponsesCallCount += 1
+            return state.streamResponsesResults.indices.contains(i) ? state.streamResponsesResults[i] : nil
+        }
+        guard let result else {
             return AsyncThrowingStream { $0.finish() }
         }
-        return try streamResponsesResults[index].get()
+        return try result.get()
     }
 }
 
