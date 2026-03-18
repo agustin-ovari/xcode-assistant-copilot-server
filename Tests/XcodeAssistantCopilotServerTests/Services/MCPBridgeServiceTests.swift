@@ -1,5 +1,6 @@
 @testable import XcodeAssistantCopilotServer
 import Testing
+import Foundation
 
 @Test func mcpBridgeErrorNotStartedDescription() {
     let error = MCPBridgeError.notStarted
@@ -54,5 +55,70 @@ import Testing
 
     for error in cases {
         #expect(!error.description.isEmpty)
+    }
+}
+
+@Test("Throws mcpBridgeNotFound when xcrun --find exits with non-zero code")
+func xcrunFindFailsWithNonZeroExit() async {
+    let runner = MockProcessRunner(stdout: "", stderr: "not found", exitCode: 1)
+    let bridge = MCPBridgeService(
+        serverConfig: MCPServerConfiguration(type: .local, command: "/usr/bin/xcrun"),
+        logger: MockLogger(),
+        clientName: "test",
+        clientVersion: "0.0.0",
+        processRunner: runner
+    )
+
+    do {
+        try await bridge.start()
+        Issue.record("Expected mcpBridgeNotFound to be thrown")
+    } catch MCPBridgeError.mcpBridgeNotFound {
+        // expected
+    } catch {
+        Issue.record("Expected MCPBridgeError.mcpBridgeNotFound, got \(error)")
+    }
+}
+
+@Test("Throws mcpBridgeNotFound when processRunner throws")
+func xcrunFindThrows() async {
+    let runner = MockProcessRunner(throwing: ProcessRunnerError.executableNotFound("/usr/bin/xcrun"))
+    let bridge = MCPBridgeService(
+        serverConfig: MCPServerConfiguration(type: .local, command: "/usr/bin/xcrun"),
+        logger: MockLogger(),
+        clientName: "test",
+        clientVersion: "0.0.0",
+        processRunner: runner
+    )
+
+    do {
+        try await bridge.start()
+        Issue.record("Expected mcpBridgeNotFound to be thrown")
+    } catch MCPBridgeError.mcpBridgeNotFound {
+        // expected
+    } catch {
+        Issue.record("Expected MCPBridgeError.mcpBridgeNotFound, got \(error)")
+    }
+}
+
+@Test("Skips verification for non-xcrun commands")
+func nonXcrunCommandSkipsVerification() async {
+    let runner = MockProcessRunner(stdout: "", stderr: "", exitCode: 0)
+    let bridge = MCPBridgeService(
+        serverConfig: MCPServerConfiguration(type: .local, command: "/usr/local/bin/custom-bridge"),
+        logger: MockLogger(),
+        clientName: "test",
+        clientVersion: "0.0.0",
+        processRunner: runner
+    )
+
+    // start() will fail trying to spawn the real process, but verifyMCPBridgeExists
+    // must NOT have invoked the runner (it only checks xcrun commands), so no
+    // mcpBridgeNotFound error should be thrown.
+    do {
+        try await bridge.start()
+    } catch MCPBridgeError.mcpBridgeNotFound {
+        Issue.record("verifyMCPBridgeExists should not be called for non-xcrun commands")
+    } catch {
+        // Other errors (process spawn) are expected in a test environment
     }
 }

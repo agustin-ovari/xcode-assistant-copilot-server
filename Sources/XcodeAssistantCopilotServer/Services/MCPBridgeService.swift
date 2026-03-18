@@ -1,6 +1,6 @@
 import Foundation
 
-public enum MCPBridgeError: Error, CustomStringConvertible {
+public enum MCPBridgeError: Error, CustomStringConvertible, Equatable {
     case notStarted
     case alreadyStarted
     case processSpawnFailed(String)
@@ -42,6 +42,7 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
     private let pidFile: MCPBridgePIDFileProtocol?
     private let clientName: String
     private let clientVersion: String
+    private let processRunner: ProcessRunnerProtocol
     private var process: Process?
     private var stdinPipe: Pipe?
     private var stdoutPipe: Pipe?
@@ -61,13 +62,15 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
         logger: LoggerProtocol,
         pidFile: MCPBridgePIDFileProtocol? = nil,
         clientName: String,
-        clientVersion: String
+        clientVersion: String,
+        processRunner: ProcessRunnerProtocol = ProcessRunner()
     ) {
         self.serverConfig = serverConfig
         self.logger = logger
         self.pidFile = pidFile
         self.clientName = clientName
         self.clientVersion = clientVersion
+        self.processRunner = processRunner
     }
 
     public func start() async throws {
@@ -382,21 +385,14 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
 
     private func verifyMCPBridgeExists(command: String, arguments: [String]) async throws {
         if command == "/usr/bin/xcrun" || command == "xcrun" {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-            process.arguments = ["--find", "mcpbridge"]
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = Pipe()
-
+            let result: ProcessResult
             do {
-                try process.run()
-                process.waitUntilExit()
+                result = try await processRunner.run(executablePath: "/usr/bin/xcrun", arguments: ["--find", "mcpbridge"])
             } catch {
                 throw MCPBridgeError.mcpBridgeNotFound
             }
 
-            guard process.terminationStatus == 0 else {
+            guard result.succeeded else {
                 throw MCPBridgeError.mcpBridgeNotFound
             }
 
