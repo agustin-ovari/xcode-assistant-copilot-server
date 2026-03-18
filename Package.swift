@@ -4,7 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "xcode-assistant-copilot-server",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS(.v26)],
     products: [
         .executable(
             name: "xcode-assistant-copilot-server",
