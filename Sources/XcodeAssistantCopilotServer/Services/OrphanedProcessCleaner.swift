@@ -1,7 +1,7 @@
 import Foundation
 
 public protocol OrphanedProcessCleanerProtocol: Sendable {
-    func cleanupIfNeeded()
+    func cleanupIfNeeded() async
 }
 
 public struct OrphanedProcessCleaner: OrphanedProcessCleanerProtocol, Sendable {
@@ -13,7 +13,7 @@ public struct OrphanedProcessCleaner: OrphanedProcessCleanerProtocol, Sendable {
         self.logger = logger
     }
 
-    public func cleanupIfNeeded() {
+    public func cleanupIfNeeded() async {
         guard let stalePID = pidFile.read() else {
             logger.debug("No stale MCP bridge PID file found")
             return
@@ -33,7 +33,7 @@ public struct OrphanedProcessCleaner: OrphanedProcessCleanerProtocol, Sendable {
 
         var terminated = false
         for _ in 0..<10 {
-            Thread.sleep(forTimeInterval: 0.1)
+            try? await Task.sleep(for: .milliseconds(100))
             if !pidFile.isProcessRunning(pid: stalePID) {
                 terminated = true
                 break

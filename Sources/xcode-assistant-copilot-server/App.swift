@@ -50,7 +50,7 @@ struct App: AsyncParsableCommand {
 
         let pidFile = MCPBridgePIDFile()
         let orphanCleaner = OrphanedProcessCleaner(pidFile: pidFile, logger: logger)
-        orphanCleaner.cleanupIfNeeded()
+        await orphanCleaner.cleanupIfNeeded()
 
         let processRunner = ProcessRunner()
         let httpClient = HTTPClient(timeoutIntervalForRequest: configuration.timeouts.httpClientTimeoutSeconds)

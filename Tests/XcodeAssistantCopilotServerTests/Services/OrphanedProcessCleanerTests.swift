@@ -8,12 +8,12 @@ import Testing
 struct OrphanedProcessCleanerTests {
 
     @Test("Does nothing when no PID file exists")
-    func noPIDFile() {
+    func noPIDFile() async {
         let mockPIDFile = MockMCPBridgePIDFile()
         let logger = MockLogger()
         let cleaner = OrphanedProcessCleaner(pidFile: mockPIDFile, logger: logger)
 
-        cleaner.cleanupIfNeeded()
+        await cleaner.cleanupIfNeeded()
 
         #expect(mockPIDFile.readCallCount == 1)
         #expect(mockPIDFile.removeCallCount == 0)
@@ -21,14 +21,14 @@ struct OrphanedProcessCleanerTests {
     }
 
     @Test("Removes stale PID file when process is no longer running")
-    func staleProcessNotRunning() {
+    func staleProcessNotRunning() async {
         let mockPIDFile = MockMCPBridgePIDFile()
         mockPIDFile.storedPID = 12345
         mockPIDFile.processRunning = false
         let logger = MockLogger()
         let cleaner = OrphanedProcessCleaner(pidFile: mockPIDFile, logger: logger)
 
-        cleaner.cleanupIfNeeded()
+        await cleaner.cleanupIfNeeded()
 
         #expect(mockPIDFile.readCallCount == 1)
         #expect(mockPIDFile.isProcessRunningCallCount == 1)
@@ -38,7 +38,7 @@ struct OrphanedProcessCleanerTests {
     }
 
     @Test("Terminates orphaned process that is still running and removes PID file")
-    func terminatesOrphanedProcess() {
+    func terminatesOrphanedProcess() async {
         let mockPIDFile = MockMCPBridgePIDFile()
         mockPIDFile.storedPID = 99999
         mockPIDFile.processRunning = true
@@ -46,7 +46,7 @@ struct OrphanedProcessCleanerTests {
         let logger = MockLogger()
         let cleaner = OrphanedProcessCleaner(pidFile: mockPIDFile, logger: logger)
 
-        cleaner.cleanupIfNeeded()
+        await cleaner.cleanupIfNeeded()
 
         #expect(mockPIDFile.readCallCount == 1)
         #expect(mockPIDFile.isProcessRunningCallCount >= 2)
@@ -56,7 +56,7 @@ struct OrphanedProcessCleanerTests {
     }
 
     @Test("Sends SIGKILL when process does not terminate gracefully")
-    func sendsKillWhenProcessDoesNotTerminate() {
+    func sendsKillWhenProcessDoesNotTerminate() async {
         let mockPIDFile = MockMCPBridgePIDFile()
         mockPIDFile.storedPID = 88888
         mockPIDFile.processRunning = true
@@ -64,21 +64,21 @@ struct OrphanedProcessCleanerTests {
         let logger = MockLogger()
         let cleaner = OrphanedProcessCleaner(pidFile: mockPIDFile, logger: logger)
 
-        cleaner.cleanupIfNeeded()
+        await cleaner.cleanupIfNeeded()
 
         #expect(mockPIDFile.removeCallCount == 1)
         #expect(logger.warnMessages.contains { $0.contains("SIGKILL") })
     }
 
     @Test("Logs PID correctly when orphaned process found")
-    func logsPIDCorrectly() {
+    func logsPIDCorrectly() async {
         let mockPIDFile = MockMCPBridgePIDFile()
         mockPIDFile.storedPID = 54321
         mockPIDFile.processRunning = false
         let logger = MockLogger()
         let cleaner = OrphanedProcessCleaner(pidFile: mockPIDFile, logger: logger)
 
-        cleaner.cleanupIfNeeded()
+        await cleaner.cleanupIfNeeded()
 
         #expect(logger.infoMessages.contains { $0.contains("54321") })
     }
