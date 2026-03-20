@@ -254,7 +254,7 @@ struct CompositeMCPBridgeServiceTests {
             logger: MockLogger()
         )
 
-        let args: [String: AnyCodable] = ["key": AnyCodable(.string("value"))]
+        let args: [String: JSONValue] = ["key": .string("value")]
         try await composite.start()
         _ = try await composite.callTool(name: "toolA", arguments: args)
 

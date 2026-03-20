@@ -507,7 +507,7 @@ private func startService(
     let callTask = Task<MCPToolResult, Error> {
         try await service.callTool(
             name: "search_files",
-            arguments: ["query": AnyCodable(.string("main.swift"))]
+            arguments: ["query": .string("main.swift")]
         )
     }
 

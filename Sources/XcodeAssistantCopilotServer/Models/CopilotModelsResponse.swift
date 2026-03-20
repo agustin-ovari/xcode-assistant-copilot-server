@@ -212,8 +212,6 @@ public struct CopilotModelsResponse: Decodable, Sendable {
         while !arrayContainer.isAtEnd {
             if let model = try? arrayContainer.decode(CopilotModel.self) {
                 result.append(model)
-            } else {
-                _ = try? arrayContainer.decode(AnyCodable.self)
             }
         }
         return result

@@ -4,9 +4,9 @@ public struct MCPRequest: Encodable, Sendable {
     public let jsonrpc: String
     public let id: Int
     public let method: String
-    public let params: [String: AnyCodable]?
+    public let params: [String: JSONValue]?
 
-    public init(id: Int, method: String, params: [String: AnyCodable]? = nil) {
+    public init(id: Int, method: String, params: [String: JSONValue]? = nil) {
         self.jsonrpc = "2.0"
         self.id = id
         self.method = method
@@ -50,13 +50,13 @@ public struct MCPResult: Decodable, Sendable {
     public let content: [MCPContent]?
     public let tools: [MCPToolDefinition]?
     public let capabilities: MCPCapabilities?
-    public let raw: [String: AnyCodable]
+    public let raw: [String: JSONValue]
 
     public init(
         content: [MCPContent]? = nil,
         tools: [MCPToolDefinition]? = nil,
         capabilities: MCPCapabilities? = nil,
-        raw: [String: AnyCodable] = [:]
+        raw: [String: JSONValue] = [:]
     ) {
         self.content = content
         self.tools = tools
@@ -92,9 +92,9 @@ public struct MCPResult: Decodable, Sendable {
         self.capabilities = try container.decodeIfPresent(MCPCapabilities.self, forKey: .capabilities)
 
         let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
-        var rawDict = [String: AnyCodable]()
+        var rawDict = [String: JSONValue]()
         for key in dynamicContainer.allKeys {
-            let value = try dynamicContainer.decode(AnyCodable.self, forKey: key)
+            let value = try dynamicContainer.decode(JSONValue.self, forKey: key)
             rawDict[key.stringValue] = value
         }
 
@@ -104,9 +104,9 @@ public struct MCPResult: Decodable, Sendable {
     }
 
     private static func patchStructuredContent(
-        _ raw: [String: AnyCodable],
+        _ raw: [String: JSONValue],
         content: [MCPContent]?
-    ) -> [String: AnyCodable] {
+    ) -> [String: JSONValue] {
         guard let contentItems = content, !contentItems.isEmpty else { return raw }
         guard raw["structuredContent"] == nil else { return raw }
 
@@ -117,10 +117,10 @@ public struct MCPResult: Decodable, Sendable {
 
         var patched = raw
         if let jsonData = text.data(using: .utf8),
-           let parsed = try? JSONDecoder().decode(AnyCodable.self, from: jsonData) {
+           let parsed = try? JSONDecoder().decode(JSONValue.self, from: jsonData) {
             patched["structuredContent"] = parsed
         } else {
-            patched["structuredContent"] = AnyCodable(.dictionary(["text": AnyCodable(.string(text))]))
+            patched["structuredContent"] = .object(["text": .string(text)])
         }
 
         return patched
@@ -166,9 +166,9 @@ public struct MCPError: Decodable, Sendable {
 public struct MCPToolDefinition: Decodable, Sendable {
     public let name: String
     public let description: String?
-    public let inputSchema: [String: AnyCodable]?
+    public let inputSchema: [String: JSONValue]?
 
-    public init(name: String, description: String? = nil, inputSchema: [String: AnyCodable]? = nil) {
+    public init(name: String, description: String? = nil, inputSchema: [String: JSONValue]? = nil) {
         self.name = name
         self.description = description
         self.inputSchema = inputSchema
@@ -178,9 +178,9 @@ public struct MCPToolDefinition: Decodable, Sendable {
 public struct MCPNotification: Encodable, Sendable {
     public let jsonrpc: String
     public let method: String
-    public let params: [String: AnyCodable]?
+    public let params: [String: JSONValue]?
 
-    public init(method: String, params: [String: AnyCodable]? = nil) {
+    public init(method: String, params: [String: JSONValue]? = nil) {
         self.jsonrpc = "2.0"
         self.method = method
         self.params = params

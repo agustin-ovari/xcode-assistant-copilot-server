@@ -187,12 +187,12 @@ import Foundation
             name: "get_weather",
             description: "Get the weather",
             parameters: [
-                "type": AnyCodable(.string("object")),
-                "properties": AnyCodable(.dictionary([
-                    "city": AnyCodable(.dictionary([
-                        "type": AnyCodable(.string("string"))
-                    ]))
-                ]))
+                "type": .string("object"),
+                "properties": .object([
+                    "city": .object([
+                        "type": .string("string")
+                    ])
+                ])
             ]
         )
     )
@@ -274,7 +274,7 @@ import Foundation
     let request = CopilotChatRequest(
         model: "gpt-5.1-codex",
         messages: [ChatCompletionMessage(role: .user, content: .text("Hi"))],
-        toolChoice: AnyCodable(.string("auto"))
+        toolChoice: .auto
     )
 
     let result = translator.translateRequest(from: request)

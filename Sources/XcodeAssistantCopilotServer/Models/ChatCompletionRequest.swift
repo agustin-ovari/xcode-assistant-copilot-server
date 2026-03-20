@@ -3,9 +3,9 @@ import Foundation
 public struct ToolFunction: Codable, Sendable {
     public let name: String
     public let description: String?
-    public let parameters: [String: AnyCodable]?
+    public let parameters: [String: JSONValue]?
 
-    public init(name: String, description: String? = nil, parameters: [String: AnyCodable]? = nil) {
+    public init(name: String, description: String? = nil, parameters: [String: JSONValue]? = nil) {
         self.name = name
         self.description = description
         self.parameters = parameters
@@ -32,7 +32,7 @@ public struct ChatCompletionRequest: Codable, Sendable {
     public let presencePenalty: Double?
     public let frequencyPenalty: Double?
     public let tools: [Tool]?
-    public let toolChoice: AnyCodable?
+    public let toolChoice: ToolChoice?
     public let user: String?
     public let stream: Bool?
 
@@ -61,7 +61,7 @@ public struct ChatCompletionRequest: Codable, Sendable {
         presencePenalty: Double? = nil,
         frequencyPenalty: Double? = nil,
         tools: [Tool]? = nil,
-        toolChoice: AnyCodable? = nil,
+        toolChoice: ToolChoice? = nil,
         user: String? = nil,
         stream: Bool? = nil
     ) {
@@ -108,73 +108,6 @@ public enum StopSequence: Codable, Sendable {
             try container.encode(text)
         case .multiple(let array):
             try container.encode(array)
-        }
-    }
-}
-
-public struct AnyCodable: Codable, Sendable {
-    public let value: AnyCodableValue
-
-    public init(_ value: AnyCodableValue) {
-        self.value = value
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        self.value = try AnyCodableValue(from: container)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try value.encode(to: &container)
-    }
-}
-
-public enum AnyCodableValue: Sendable {
-    case string(String)
-    case int(Int)
-    case double(Double)
-    case bool(Bool)
-    case array([AnyCodable])
-    case dictionary([String: AnyCodable])
-    case null
-
-    init(from container: SingleValueDecodingContainer) throws {
-        if container.decodeNil() {
-            self = .null
-        } else if let value = try? container.decode(Bool.self) {
-            self = .bool(value)
-        } else if let value = try? container.decode(Int.self) {
-            self = .int(value)
-        } else if let value = try? container.decode(Double.self) {
-            self = .double(value)
-        } else if let value = try? container.decode(String.self) {
-            self = .string(value)
-        } else if let value = try? container.decode([AnyCodable].self) {
-            self = .array(value)
-        } else if let value = try? container.decode([String: AnyCodable].self) {
-            self = .dictionary(value)
-        } else {
-            self = .null
-        }
-    }
-
-    func encode(to container: inout SingleValueEncodingContainer) throws {
-        switch self {
-        case .string(let value):
-            try container.encode(value)
-        case .int(let value):
-            try container.encode(value)
-        case .double(let value):
-            try container.encode(value)
-        case .bool(let value):
-            try container.encode(value)
-        case .array(let value):
-            try container.encode(value)
-        case .dictionary(let value):
-            try container.encode(value)
-        case .null:
-            try container.encodeNil()
         }
     }
 }

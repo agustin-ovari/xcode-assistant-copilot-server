@@ -33,7 +33,7 @@ final class MockMCPBridgeService: MCPBridgeServiceProtocol, Sendable {
         var startCallCount = 0
         var stopCallCount = 0
         var listToolsCallCount = 0
-        var calledTools: [(name: String, arguments: [String: AnyCodable])] = []
+        var calledTools: [(name: String, arguments: [String: JSONValue])] = []
         var startError: Error?
         var stopError: Error?
         var listToolsError: Error?
@@ -62,7 +62,7 @@ final class MockMCPBridgeService: MCPBridgeServiceProtocol, Sendable {
     var startCallCount: Int { mutex.withLock { $0.startCallCount } }
     var stopCallCount: Int { mutex.withLock { $0.stopCallCount } }
     var listToolsCallCount: Int { mutex.withLock { $0.listToolsCallCount } }
-    var calledTools: [(name: String, arguments: [String: AnyCodable])] { mutex.withLock { $0.calledTools } }
+    var calledTools: [(name: String, arguments: [String: JSONValue])] { mutex.withLock { $0.calledTools } }
 
     var startError: Error? {
         get { mutex.withLock { $0.startError } }
@@ -108,7 +108,7 @@ final class MockMCPBridgeService: MCPBridgeServiceProtocol, Sendable {
         return tools
     }
 
-    func callTool(name: String, arguments: [String: AnyCodable]) async throws -> MCPToolResult {
+    func callTool(name: String, arguments: [String: JSONValue]) async throws -> MCPToolResult {
         mutex.withLock { $0.calledTools.append((name: name, arguments: arguments)) }
         await callToolGate.signal()
         if let delay = mutex.withLock({ $0.callToolDelay }) {

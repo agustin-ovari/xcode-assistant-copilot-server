@@ -89,7 +89,7 @@ public actor CompositeMCPBridgeService: MCPBridgeServiceProtocol {
         return allTools
     }
 
-    public func callTool(name: String, arguments: [String: AnyCodable]) async throws -> MCPToolResult {
+    public func callTool(name: String, arguments: [String: JSONValue]) async throws -> MCPToolResult {
         if toolToBridge.isEmpty {
             _ = try await listTools()
         }

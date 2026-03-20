@@ -458,7 +458,7 @@ private func startService(
 
     _ = try await service.callTool(
         name: "echo",
-        arguments: ["input": AnyCodable(.string("hello world"))]
+        arguments: ["input": .string("hello world")]
     )
 
     guard let body = client.sentEndpoints[2].body,

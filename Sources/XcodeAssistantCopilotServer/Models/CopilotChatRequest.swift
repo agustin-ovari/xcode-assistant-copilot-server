@@ -8,7 +8,7 @@ public struct CopilotChatRequest: Encodable, Sendable {
     public let maxTokens: Int?
     public let stop: StopSequence?
     public let tools: [Tool]?
-    public let toolChoice: AnyCodable?
+    public let toolChoice: ToolChoice?
     public let reasoningEffort: ReasoningEffort?
     public let stream: Bool
     public let preEncodedTools: Data?
@@ -34,7 +34,7 @@ public struct CopilotChatRequest: Encodable, Sendable {
         maxTokens: Int? = nil,
         stop: StopSequence? = nil,
         tools: [Tool]? = nil,
-        toolChoice: AnyCodable? = nil,
+        toolChoice: ToolChoice? = nil,
         reasoningEffort: ReasoningEffort? = nil,
         stream: Bool = true,
         preEncodedTools: Data? = nil
@@ -78,10 +78,9 @@ public struct CopilotChatRequest: Encodable, Sendable {
         try container.encodeIfPresent(maxTokens, forKey: .maxTokens)
         try container.encodeIfPresent(stop, forKey: .stop)
         if let preEncodedTools {
-            let jsonObject = try JSONSerialization.jsonObject(with: preEncodedTools)
-            if let array = jsonObject as? [Any], !array.isEmpty {
-                let codableArray = array.compactMap { AnyCodable(fromAny: $0) }
-                try container.encode(codableArray, forKey: .tools)
+            if let decoded = try? JSONDecoder().decode([JSONValue].self, from: preEncodedTools),
+               !decoded.isEmpty {
+                try container.encode(decoded, forKey: .tools)
             }
         } else if let tools, !tools.isEmpty {
             try container.encode(tools, forKey: .tools)

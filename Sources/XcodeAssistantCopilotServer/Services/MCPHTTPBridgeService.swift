@@ -78,14 +78,14 @@ public actor MCPHTTPBridgeService: MCPBridgeServiceProtocol {
         return mcpTools
     }
 
-    public func callTool(name: String, arguments: [String: AnyCodable]) async throws -> MCPToolResult {
+    public func callTool(name: String, arguments: [String: JSONValue]) async throws -> MCPToolResult {
         guard isStarted else {
             throw MCPBridgeError.notStarted
         }
         logger.debug("HTTP MCP calling tool: \(name)")
-        let params: [String: AnyCodable] = [
-            "name": AnyCodable(.string(name)),
-            "arguments": AnyCodable(.dictionary(arguments)),
+        let params: [String: JSONValue] = [
+            "name": .string(name),
+            "arguments": .object(arguments),
         ]
         let response = try await sendRequest(method: "tools/call", params: params)
         if let error = response.error {
@@ -101,7 +101,7 @@ public actor MCPHTTPBridgeService: MCPBridgeServiceProtocol {
         return toolResult
     }
 
-    private func sendRequest(method: String, params: [String: AnyCodable]? = nil) async throws -> MCPResponse {
+    private func sendRequest(method: String, params: [String: JSONValue]? = nil) async throws -> MCPResponse {
         guard let urlString = serverConfig.url else {
             throw MCPBridgeError.notStarted
         }
@@ -163,7 +163,7 @@ public actor MCPHTTPBridgeService: MCPBridgeServiceProtocol {
         throw MCPBridgeError.communicationFailed("No valid JSON-RPC response found in SSE body")
     }
 
-    private func sendNotification(method: String, params: [String: AnyCodable]? = nil) async throws {
+    private func sendNotification(method: String, params: [String: JSONValue]? = nil) async throws {
         guard let urlString = serverConfig.url else { return }
         let notification = MCPNotification(method: method, params: params)
         let notificationData: Data
@@ -182,13 +182,13 @@ public actor MCPHTTPBridgeService: MCPBridgeServiceProtocol {
     }
 
     private func sendInitialize() async throws {
-        let params: [String: AnyCodable] = [
-            "protocolVersion": AnyCodable(.string(MCPConstants.protocolVersion)),
-            "capabilities": AnyCodable(.dictionary([:])),
-            "clientInfo": AnyCodable(.dictionary([
-                "name": AnyCodable(.string(clientName)),
-                "version": AnyCodable(.string(clientVersion)),
-            ])),
+        let params: [String: JSONValue] = [
+            "protocolVersion": .string(MCPConstants.protocolVersion),
+            "capabilities": .object([:]),
+            "clientInfo": .object([
+                "name": .string(clientName),
+                "version": .string(clientVersion),
+            ]),
         ]
         let response = try await sendRequest(method: "initialize", params: params)
         if let error = response.error {

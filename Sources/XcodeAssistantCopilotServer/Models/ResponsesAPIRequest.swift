@@ -6,7 +6,7 @@ public struct ResponsesAPIRequest: Encodable, Sendable {
     public let stream: Bool
     public let instructions: String?
     public let tools: [ResponsesAPITool]?
-    public let toolChoice: AnyCodable?
+    public let toolChoice: ToolChoice?
     public let reasoning: ResponsesReasoning?
 
     enum CodingKeys: String, CodingKey {
@@ -25,7 +25,7 @@ public struct ResponsesAPIRequest: Encodable, Sendable {
         stream: Bool = true,
         instructions: String? = nil,
         tools: [ResponsesAPITool]? = nil,
-        toolChoice: AnyCodable? = nil,
+        toolChoice: ToolChoice? = nil,
         reasoning: ResponsesReasoning? = nil
     ) {
         self.model = model
@@ -113,12 +113,12 @@ public struct ResponsesAPITool: Encodable, Sendable {
     public let type: String
     public let name: String
     public let description: String?
-    public let parameters: [String: AnyCodable]?
+    public let parameters: [String: JSONValue]?
 
     public init(
         name: String,
         description: String? = nil,
-        parameters: [String: AnyCodable]? = nil
+        parameters: [String: JSONValue]? = nil
     ) {
         self.type = "function"
         self.name = name

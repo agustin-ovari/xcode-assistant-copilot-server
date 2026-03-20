@@ -36,7 +36,7 @@ public protocol MCPBridgeServiceProtocol: Sendable {
     func start() async throws
     func stop() async throws
     func listTools() async throws -> [MCPTool]
-    func callTool(name: String, arguments: [String: AnyCodable]) async throws -> MCPToolResult
+    func callTool(name: String, arguments: [String: JSONValue]) async throws -> MCPToolResult
 }
 
 public actor MCPBridgeService: MCPBridgeServiceProtocol {
@@ -197,16 +197,16 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
         return mcpTools
     }
 
-    public func callTool(name: String, arguments: [String: AnyCodable]) async throws -> MCPToolResult {
+    public func callTool(name: String, arguments: [String: JSONValue]) async throws -> MCPToolResult {
         guard process != nil else {
             throw MCPBridgeError.notStarted
         }
 
         logger.debug("Calling MCP tool: \(name)")
 
-        let params: [String: AnyCodable] = [
-            "name": AnyCodable(.string(name)),
-            "arguments": AnyCodable(.dictionary(arguments)),
+        let params: [String: JSONValue] = [
+            "name": .string(name),
+            "arguments": .object(arguments),
         ]
 
         let response = try await sendRequest(method: "tools/call", params: params)
@@ -230,13 +230,13 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
     }
 
     private func initialize() async throws {
-        let params: [String: AnyCodable] = [
-            "protocolVersion": AnyCodable(.string(MCPConstants.protocolVersion)),
-            "capabilities": AnyCodable(.dictionary([:])),
-            "clientInfo": AnyCodable(.dictionary([
-                "name": AnyCodable(.string(clientName)),
-                "version": AnyCodable(.string(clientVersion)),
-            ])),
+        let params: [String: JSONValue] = [
+            "protocolVersion": .string(MCPConstants.protocolVersion),
+            "capabilities": .object([:]),
+            "clientInfo": .object([
+                "name": .string(clientName),
+                "version": .string(clientVersion),
+            ]),
         ]
 
         let response = try await sendRequest(method: "initialize", params: params)
@@ -252,7 +252,7 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
 
     private func sendRequest(
         method: String,
-        params: [String: AnyCodable]? = nil
+        params: [String: JSONValue]? = nil
     ) async throws -> MCPResponse {
         guard stdinPipe != nil else {
             throw MCPBridgeError.notStarted
@@ -294,7 +294,7 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
 
     private func sendNotification(
         method: String,
-        params: [String: AnyCodable]? = nil
+        params: [String: JSONValue]? = nil
     ) async throws {
         guard stdinPipe != nil else {
             throw MCPBridgeError.notStarted

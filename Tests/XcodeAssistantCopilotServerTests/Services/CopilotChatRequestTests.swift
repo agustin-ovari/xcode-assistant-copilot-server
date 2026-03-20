@@ -42,17 +42,17 @@ import Testing
                     name: "get_weather",
                     description: "Get weather info",
                     parameters: [
-                        "type": AnyCodable(.string("object")),
-                        "properties": AnyCodable(.dictionary([
-                            "city": AnyCodable(.dictionary([
-                                "type": AnyCodable(.string("string"))
-                            ]))
-                        ]))
+                        "type": .string("object"),
+                        "properties": .object([
+                            "city": .object([
+                                "type": .string("string")
+                            ])
+                        ])
                     ]
                 )
             )
         ],
-        toolChoice: AnyCodable(.string("auto")),
+        toolChoice: .auto,
         reasoningEffort: .high,
         stream: true
     )
@@ -200,12 +200,7 @@ import Testing
 }
 
 @Test func copilotChatRequestEncodesToolChoiceObject() throws {
-    let toolChoice = AnyCodable(.dictionary([
-        "type": AnyCodable(.string("function")),
-        "function": AnyCodable(.dictionary([
-            "name": AnyCodable(.string("get_weather"))
-        ]))
-    ]))
+    let toolChoice = ToolChoice.function(name: "get_weather")
 
     let request = CopilotChatRequest(
         model: "gpt-4o",
@@ -378,18 +373,18 @@ import Testing
                     name: "search",
                     description: "Search for items",
                     parameters: [
-                        "type": AnyCodable(.string("object")),
-                        "required": AnyCodable(.array([AnyCodable(.string("query"))])),
-                        "properties": AnyCodable(.dictionary([
-                            "query": AnyCodable(.dictionary([
-                                "type": AnyCodable(.string("string")),
-                                "description": AnyCodable(.string("Search query"))
-                            ])),
-                            "limit": AnyCodable(.dictionary([
-                                "type": AnyCodable(.string("integer")),
-                                "default": AnyCodable(.int(10))
-                            ]))
-                        ]))
+                        "type": .string("object"),
+                        "required": .array([.string("query")]),
+                        "properties": .object([
+                            "query": .object([
+                                "type": .string("string"),
+                                "description": .string("Search query")
+                            ]),
+                            "limit": .object([
+                                "type": .string("integer"),
+                                "default": .int(10)
+                            ])
+                        ])
                     ]
                 )
             )
@@ -522,7 +517,7 @@ import Testing
                 function: ToolFunction(name: "get_weather", description: "Get weather")
             )
         ],
-        toolChoice: AnyCodable(.string("auto")),
+        toolChoice: .auto,
         reasoningEffort: .xhigh
     )
 

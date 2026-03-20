@@ -493,12 +493,12 @@ public struct ChatCompletionsHandler: Sendable {
             return "Error: MCP tool '\(toolName)' is not allowed by server configuration"
         }
 
-        let arguments: [String: AnyCodable]
+        let arguments: [String: JSONValue]
         if let argumentsString = toolCall.function.arguments {
             logger.debug("MCP tool '\(toolName)' raw arguments (\(argumentsString.count) chars): \(argumentsString)")
             if let data = argumentsString.data(using: .utf8),
-               let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                arguments = parsed.compactMapValues { AnyCodable(fromAny: $0) }
+               let decoded = try? JSONDecoder().decode([String: JSONValue].self, from: data) {
+                arguments = decoded
                 logger.debug("MCP tool '\(toolName)' parsed \(arguments.count) argument(s): \(arguments.keys.sorted().joined(separator: ", "))")
             } else {
                 logger.error("MCP tool '\(toolName)' failed to parse arguments JSON (\(argumentsString.count) chars) — sending empty arguments")
@@ -528,7 +528,7 @@ public struct ChatCompletionsHandler: Sendable {
                 if let resolvedTab = TabIdentifierResolver.resolve(from: text, filePath: filePath) {
                     logger.debug("MCP tool '\(toolName)' got invalid tabIdentifier — retrying with resolved '\(resolvedTab)'")
                     var fixedArguments = arguments
-                    fixedArguments["tabIdentifier"] = AnyCodable(.string(resolvedTab))
+                    fixedArguments["tabIdentifier"] = .string(resolvedTab)
                     let retryResult = try await callMCPToolWithTimeout(
                         bridge: mcpBridge,
                         toolName: toolName,
@@ -558,7 +558,7 @@ public struct ChatCompletionsHandler: Sendable {
     private func callMCPToolWithTimeout(
         bridge: MCPBridgeServiceProtocol,
         toolName: String,
-        arguments: [String: AnyCodable],
+        arguments: [String: JSONValue],
         timeoutSeconds: Double
     ) async throws -> MCPToolResult {
         try await withThrowingTaskGroup(of: MCPToolResult.self) { group in

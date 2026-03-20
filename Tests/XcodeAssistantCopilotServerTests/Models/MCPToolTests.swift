@@ -7,10 +7,10 @@ import Testing
         name: "search",
         description: "Search for files",
         inputSchema: [
-            "type": AnyCodable(.string("object")),
-            "properties": AnyCodable(.dictionary([
-                "query": AnyCodable(.dictionary(["type": AnyCodable(.string("string"))]))
-            ]))
+            "type": .string("object"),
+            "properties": .object([
+                "query": .object(["type": .string("string")])
+            ])
         ]
     )
 
@@ -40,11 +40,11 @@ import Testing
         name: "read_file",
         description: "Reads a file from disk",
         inputSchema: [
-            "type": AnyCodable(.string("object")),
-            "properties": AnyCodable(.dictionary([
-                "path": AnyCodable(.dictionary(["type": AnyCodable(.string("string"))]))
-            ])),
-            "required": AnyCodable(.array([AnyCodable(.string("path"))]))
+            "type": .string("object"),
+            "properties": .object([
+                "path": .object(["type": .string("string")])
+            ]),
+            "required": .array([.string("path")])
         ]
     )
 
@@ -137,10 +137,10 @@ import Testing
         name: "test_tool",
         description: "A test tool",
         inputSchema: [
-            "type": AnyCodable(.string("object")),
-            "properties": AnyCodable(.dictionary([
-                "input": AnyCodable(.dictionary(["type": AnyCodable(.string("string"))]))
-            ]))
+            "type": .string("object"),
+            "properties": .object([
+                "input": .object(["type": .string("string")])
+            ])
         ]
     )
 
@@ -163,7 +163,7 @@ import Testing
 }
 
 @Test func mcpToolInitStoresAllFields() {
-    let schema: [String: AnyCodable] = ["type": AnyCodable(.string("object"))]
+    let schema: [String: JSONValue] = ["type": .string("object")]
     let tool = MCPTool(name: "my_tool", description: "desc", inputSchema: schema)
 
     #expect(tool.name == "my_tool")

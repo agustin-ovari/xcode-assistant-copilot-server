@@ -3,10 +3,10 @@ import Foundation
 public struct MCPTool: Sendable {
     public let name: String
     public let description: String?
-    public let inputSchema: [String: AnyCodable]?
+    public let inputSchema: [String: JSONValue]?
     public let serverName: String
 
-    public init(name: String, description: String? = nil, inputSchema: [String: AnyCodable]? = nil, serverName: String = "") {
+    public init(name: String, description: String? = nil, inputSchema: [String: JSONValue]? = nil, serverName: String = "") {
         self.name = name
         self.description = description
         self.inputSchema = inputSchema

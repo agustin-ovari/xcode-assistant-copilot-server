@@ -222,8 +222,8 @@ import Testing
 
     let raw = try #require(response.result?.raw)
     let structured = try #require(raw["structuredContent"])
-    if case .dictionary(let dict) = structured.value {
-        if case .string(let val) = dict["key"]?.value {
+    if case .object(let dict) = structured {
+        if let keyValue = dict["key"], case .string(let val) = keyValue {
             #expect(val == "value")
         } else {
             Issue.record("Expected string value for key")
@@ -250,8 +250,8 @@ import Testing
 
     let raw = try #require(response.result?.raw)
     let structured = try #require(raw["structuredContent"])
-    if case .dictionary(let dict) = structured.value {
-        if case .string(let val) = dict["text"]?.value {
+    if case .object(let dict) = structured {
+        if let textValue = dict["text"], case .string(let val) = textValue {
             #expect(val == "just plain text")
         } else {
             Issue.record("Expected string value for text key")
@@ -279,7 +279,7 @@ import Testing
 
     let raw = try #require(response.result?.raw)
     let structured = try #require(raw["structuredContent"])
-    if case .dictionary(let dict) = structured.value {
+    if case .object(let dict) = structured {
         #expect(dict["existing"] != nil)
         #expect(dict["text"] == nil)
     } else {
@@ -442,7 +442,7 @@ import Testing
 }
 
 @Test func mcpToolDefinitionInit() {
-    let tool = MCPToolDefinition(name: "my_tool", description: "desc", inputSchema: ["type": AnyCodable(.string("object"))])
+    let tool = MCPToolDefinition(name: "my_tool", description: "desc", inputSchema: ["type": .string("object")])
     #expect(tool.name == "my_tool")
     #expect(tool.description == "desc")
     #expect(tool.inputSchema?["type"] != nil)
@@ -465,7 +465,7 @@ import Testing
 
     let raw = try #require(response.result?.raw)
     let structured = try #require(raw["structuredContent"])
-    if case .array(let arr) = structured.value {
+    if case .array(let arr) = structured {
         #expect(arr.count == 3)
     } else {
         Issue.record("Expected array for structuredContent parsed from JSON array text")

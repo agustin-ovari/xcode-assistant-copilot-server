@@ -86,14 +86,14 @@ public actor MCPSSEBridgeService: MCPBridgeServiceProtocol {
         return mcpTools
     }
 
-    public func callTool(name: String, arguments: [String: AnyCodable]) async throws -> MCPToolResult {
+    public func callTool(name: String, arguments: [String: JSONValue]) async throws -> MCPToolResult {
         guard isStarted else {
             throw MCPBridgeError.notStarted
         }
         logger.debug("SSE MCP calling tool: \(name)")
-        let params: [String: AnyCodable] = [
-            "name": AnyCodable(.string(name)),
-            "arguments": AnyCodable(.dictionary(arguments)),
+        let params: [String: JSONValue] = [
+            "name": .string(name),
+            "arguments": .object(arguments),
         ]
         let response = try await sendMessage(method: "tools/call", params: params)
         if let error = response.error {
@@ -208,7 +208,7 @@ public actor MCPSSEBridgeService: MCPBridgeServiceProtocol {
         )
     }
 
-    private func sendMessage(method: String, params: [String: AnyCodable]? = nil) async throws -> MCPResponse {
+    private func sendMessage(method: String, params: [String: JSONValue]? = nil) async throws -> MCPResponse {
         guard let url = messagesEndpointURL else {
             throw MCPBridgeError.notStarted
         }
@@ -238,7 +238,7 @@ public actor MCPSSEBridgeService: MCPBridgeServiceProtocol {
         }
     }
 
-    private func sendNotification(method: String, params: [String: AnyCodable]? = nil) async throws {
+    private func sendNotification(method: String, params: [String: JSONValue]? = nil) async throws {
         guard let url = messagesEndpointURL else { return }
         let notification = MCPNotification(method: method, params: params)
         let notificationData: Data
@@ -258,13 +258,13 @@ public actor MCPSSEBridgeService: MCPBridgeServiceProtocol {
     }
 
     private func sendInitialize() async throws {
-        let params: [String: AnyCodable] = [
-            "protocolVersion": AnyCodable(.string(MCPConstants.protocolVersion)),
-            "capabilities": AnyCodable(.dictionary([:])),
-            "clientInfo": AnyCodable(.dictionary([
-                "name": AnyCodable(.string(clientName)),
-                "version": AnyCodable(.string(clientVersion)),
-            ])),
+        let params: [String: JSONValue] = [
+            "protocolVersion": .string(MCPConstants.protocolVersion),
+            "capabilities": .object([:]),
+            "clientInfo": .object([
+                "name": .string(clientName),
+                "version": .string(clientVersion),
+            ]),
         ]
         let response = try await sendMessage(method: "initialize", params: params)
         if let error = response.error {

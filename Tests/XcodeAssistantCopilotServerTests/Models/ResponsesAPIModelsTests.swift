@@ -40,12 +40,12 @@ import Foundation
         name: "search",
         description: "Search the web",
         parameters: [
-            "type": AnyCodable(.string("object")),
-            "properties": AnyCodable(.dictionary([
-                "query": AnyCodable(.dictionary([
-                    "type": AnyCodable(.string("string"))
-                ]))
-            ]))
+            "type": .string("object"),
+            "properties": .object([
+                "query": .object([
+                    "type": .string("string")
+                ])
+            ])
         ]
     )
     let data = try JSONEncoder().encode(tool)
@@ -142,7 +142,7 @@ import Foundation
         stream: true,
         instructions: "You are a coding assistant",
         tools: [ResponsesAPITool(name: "read_file", description: "Read a file")],
-        toolChoice: AnyCodable(.string("auto")),
+        toolChoice: .auto,
         reasoning: ResponsesReasoning(effort: "high")
     )
 
@@ -374,20 +374,17 @@ import Foundation
 }
 
 @Test func responsesAPIRequestEncodesToolChoiceObject() throws {
-    let toolChoice = AnyCodable(.dictionary([
-        "type": AnyCodable(.string("function")),
-        "name": AnyCodable(.string("get_weather"))
-    ]))
     let request = ResponsesAPIRequest(
         model: "gpt-5.1-codex",
         input: [.message(ResponsesMessage(role: "user", content: "Weather?"))],
-        toolChoice: toolChoice
+        toolChoice: .function(name: "get_weather")
     )
     let data = try JSONEncoder().encode(request)
     let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any]
     let tc = dict?["tool_choice"] as? [String: Any]
     #expect(tc?["type"] as? String == "function")
-    #expect(tc?["name"] as? String == "get_weather")
+    let function = tc?["function"] as? [String: Any]
+    #expect(function?["name"] as? String == "get_weather")
 }
 
 @Test func responsesReasoningEffortValues() throws {
