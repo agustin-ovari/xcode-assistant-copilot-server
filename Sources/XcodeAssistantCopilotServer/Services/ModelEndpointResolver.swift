@@ -7,12 +7,14 @@ public enum ModelEndpoint: Sendable, Equatable {
 
 public protocol ModelEndpointResolverProtocol: Sendable {
     func endpoint(for modelId: String, credentials: CopilotCredentials) async -> ModelEndpoint
+    func contextWindowTokenLimit(for modelId: String, credentials: CopilotCredentials) async -> Int?
 }
 
 public actor ModelEndpointResolver: ModelEndpointResolverProtocol {
     private let copilotAPI: CopilotAPIServiceProtocol
     private let logger: LoggerProtocol
     private var cachedEndpoints: [String: [String]]?
+    private var cachedContextWindows: [String: Int]?
     private var lastFetchTime: Date?
     private static let cacheDuration: TimeInterval = 300
 
@@ -43,6 +45,18 @@ public actor ModelEndpointResolver: ModelEndpointResolverProtocol {
         return .chatCompletions
     }
 
+    public func contextWindowTokenLimit(for modelId: String, credentials: CopilotCredentials) async -> Int? {
+        await refreshCacheIfNeeded(credentials: credentials)
+
+        guard let tokenLimit = cachedContextWindows?[modelId] else {
+            logger.info("No context window token limit found for model '\(modelId)'")
+            return nil
+        }
+
+        logger.info("Context window token limit for '\(modelId)': \(tokenLimit)")
+        return tokenLimit
+    }
+
     private func refreshCacheIfNeeded(credentials: CopilotCredentials) async {
         if let lastFetch = lastFetchTime,
            Date.now.timeIntervalSince(lastFetch) < Self.cacheDuration,
@@ -53,12 +67,17 @@ public actor ModelEndpointResolver: ModelEndpointResolverProtocol {
         do {
             let models = try await copilotAPI.listModels(credentials: credentials)
             var mapping: [String: [String]] = [:]
+            var contextWindows: [String: Int] = [:]
             for model in models {
                 if let supported = model.supportedEndpoints {
                     mapping[model.id] = supported
                 }
+                if let maxTokens = model.capabilities?.limits?.maxContextWindowTokens {
+                    contextWindows[model.id] = maxTokens
+                }
             }
             cachedEndpoints = mapping
+            cachedContextWindows = contextWindows
             lastFetchTime = .now
             logger.debug("Refreshed model endpoint cache with \(models.count) model(s)")
         } catch {

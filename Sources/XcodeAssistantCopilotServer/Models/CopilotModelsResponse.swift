@@ -66,21 +66,46 @@ public struct CopilotModel: Decodable, Sendable {
     }
 }
 
+public struct CopilotModelLimits: Decodable, Sendable {
+    public let maxContextWindowTokens: Int?
+    public let maxOutputTokens: Int?
+    public let maxPromptTokens: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case maxContextWindowTokens = "max_context_window_tokens"
+        case maxOutputTokens = "max_output_tokens"
+        case maxPromptTokens = "max_prompt_tokens"
+    }
+
+    public init(
+        maxContextWindowTokens: Int? = nil,
+        maxOutputTokens: Int? = nil,
+        maxPromptTokens: Int? = nil
+    ) {
+        self.maxContextWindowTokens = maxContextWindowTokens
+        self.maxOutputTokens = maxOutputTokens
+        self.maxPromptTokens = maxPromptTokens
+    }
+}
+
 public struct CopilotModelCapabilities: Decodable, Sendable {
     public let family: String?
     public let type: String?
     public let supports: CopilotModelSupports?
+    public let limits: CopilotModelLimits?
 
     enum CodingKeys: String, CodingKey {
         case family
         case type
         case supports
+        case limits
     }
 
-    public init(family: String? = nil, type: String? = nil, supports: CopilotModelSupports? = nil) {
+    public init(family: String? = nil, type: String? = nil, supports: CopilotModelSupports? = nil, limits: CopilotModelLimits? = nil) {
         self.family = family
         self.type = type
         self.supports = supports
+        self.limits = limits
     }
 
     public init(from decoder: Decoder) throws {
@@ -88,6 +113,7 @@ public struct CopilotModelCapabilities: Decodable, Sendable {
         family = try container.decodeIfPresent(String.self, forKey: .family)
         type = try container.decodeIfPresent(String.self, forKey: .type)
         supports = try? container.decodeIfPresent(CopilotModelSupports.self, forKey: .supports)
+        limits = try? container.decodeIfPresent(CopilotModelLimits.self, forKey: .limits)
     }
 }
 

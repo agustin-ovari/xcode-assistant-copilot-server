@@ -106,7 +106,8 @@ private func makeLoader(logger: MockLogger = MockLogger()) -> (ConfigurationLoad
     #expect(config.timeouts.requestTimeoutSeconds == 300)
     #expect(config.timeouts.streamingEndpointTimeoutSeconds == 300)
     #expect(config.timeouts.httpClientTimeoutSeconds == 300)
-    #expect(config.maxAgentLoopIterations == 40)
+    #expect(config.maxAgentLoopIterations == 20)
+    #expect(config.contextRecencyWindow == 3)
 }
 
 @Test func loadCreatesDefaultConfigDirectoryIfMissing() throws {

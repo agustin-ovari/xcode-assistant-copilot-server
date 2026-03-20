@@ -239,13 +239,24 @@ public struct ChatCompletionsHandler: Sendable {
         configuration: ServerConfiguration
     ) async {
         let formatter = AgentProgressFormatter()
+        let contextManager = ConversationContextManager(logger: logger)
         var messages = request.messages
         let model = request.model
         var iteration = 0
         var hadToolUse = false
 
-        writer.writeRoleDelta()
+        let preEncodedTools: Data? = preEncodeTools(allTools)
+        let toolsTokenEstimate = contextManager.estimateTokenCount(tools: allTools)
 
+        let modelContextWindow = await modelEndpointResolver.contextWindowTokenLimit(for: model, credentials: credentials)
+        let effectiveTokenLimit = modelContextWindow ?? 128_000
+        if let modelContextWindow {
+            logger.info("Using model-specific context window for '\(model)': \(modelContextWindow) tokens")
+        } else {
+            logger.info("No model-specific context window for '\(model)', using default: 128000 tokens")
+        }
+
+        writer.writeRoleDelta()
 
         while iteration < configuration.maxAgentLoopIterations {
             guard !Task.isCancelled else {
@@ -256,9 +267,24 @@ public struct ChatCompletionsHandler: Sendable {
             iteration += 1
             logger.debug("Agent loop iteration \(iteration)")
 
+            let compactedMessages = contextManager.compact(
+                messages: messages,
+                tokenLimit: effectiveTokenLimit,
+                recencyWindow: configuration.contextRecencyWindow
+            )
+
+            let messagesTokenEstimate = contextManager.estimateTokenCount(messages: compactedMessages)
+            let totalTokenEstimate = messagesTokenEstimate + toolsTokenEstimate
+            let usagePercent = effectiveTokenLimit > 0 ? totalTokenEstimate * 100 / effectiveTokenLimit : 0
+
+            logger.info("Current token usage \(totalTokenEstimate)/\(effectiveTokenLimit) (\(usagePercent)%)")
+            if usagePercent > 80 {
+                logger.warn("Agent loop iteration \(iteration): token usage exceeding 80% of context window")
+            }
+
             let copilotRequest = CopilotChatRequest(
                 model: model,
-                messages: messages,
+                messages: compactedMessages,
                 temperature: request.temperature,
                 topP: request.topP,
                 maxTokens: request.maxTokens,
@@ -266,7 +292,8 @@ public struct ChatCompletionsHandler: Sendable {
                 tools: allTools.isEmpty ? nil : allTools,
                 toolChoice: request.toolChoice,
                 reasoningEffort: configuration.reasoningEffort,
-                stream: true
+                stream: true,
+                preEncodedTools: preEncodedTools
             )
 
             let collectedResponse: CollectedResponse
@@ -566,6 +593,20 @@ public struct ChatCompletionsHandler: Sendable {
             let completionId = ChatCompletionChunk.makeCompletionId()
             logger.debug("Generated completionId=\(completionId) for adapted stream")
             return responsesTranslator.adaptStream(events: rawStream, completionId: completionId, model: copilotRequest.model)
+        }
+    }
+
+    private func preEncodeTools(_ tools: [Tool]) -> Data? {
+        guard !tools.isEmpty else { return nil }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        do {
+            let data = try encoder.encode(tools)
+            logger.debug("Pre-encoded \(tools.count) tool definition(s) (\(data.count) bytes)")
+            return data
+        } catch {
+            logger.warn("Failed to pre-encode tools, will re-encode per iteration: \(error)")
+            return nil
         }
     }
 

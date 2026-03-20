@@ -11,6 +11,7 @@ public struct CopilotChatRequest: Encodable, Sendable {
     public let toolChoice: AnyCodable?
     public let reasoningEffort: ReasoningEffort?
     public let stream: Bool
+    public let preEncodedTools: Data?
 
     enum CodingKeys: String, CodingKey {
         case model
@@ -35,7 +36,8 @@ public struct CopilotChatRequest: Encodable, Sendable {
         tools: [Tool]? = nil,
         toolChoice: AnyCodable? = nil,
         reasoningEffort: ReasoningEffort? = nil,
-        stream: Bool = true
+        stream: Bool = true,
+        preEncodedTools: Data? = nil
     ) {
         self.model = model
         self.messages = messages
@@ -47,6 +49,7 @@ public struct CopilotChatRequest: Encodable, Sendable {
         self.toolChoice = toolChoice
         self.reasoningEffort = reasoningEffort
         self.stream = stream
+        self.preEncodedTools = preEncodedTools
     }
 
     public func withReasoningEffort(_ effort: ReasoningEffort?) -> CopilotChatRequest {
@@ -60,7 +63,8 @@ public struct CopilotChatRequest: Encodable, Sendable {
             tools: tools,
             toolChoice: toolChoice,
             reasoningEffort: effort,
-            stream: stream
+            stream: stream,
+            preEncodedTools: preEncodedTools
         )
     }
 
@@ -73,7 +77,13 @@ public struct CopilotChatRequest: Encodable, Sendable {
         try container.encodeIfPresent(topP, forKey: .topP)
         try container.encodeIfPresent(maxTokens, forKey: .maxTokens)
         try container.encodeIfPresent(stop, forKey: .stop)
-        if let tools, !tools.isEmpty {
+        if let preEncodedTools {
+            let jsonObject = try JSONSerialization.jsonObject(with: preEncodedTools)
+            if let array = jsonObject as? [Any], !array.isEmpty {
+                let codableArray = array.compactMap { AnyCodable(fromAny: $0) }
+                try container.encode(codableArray, forKey: .tools)
+            }
+        } else if let tools, !tools.isEmpty {
             try container.encode(tools, forKey: .tools)
         }
         try container.encodeIfPresent(toolChoice, forKey: .toolChoice)

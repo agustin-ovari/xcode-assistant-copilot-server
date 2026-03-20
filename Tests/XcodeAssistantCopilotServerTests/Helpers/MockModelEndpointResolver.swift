@@ -4,6 +4,7 @@ import Synchronization
 final class MockModelEndpointResolver: ModelEndpointResolverProtocol, Sendable {
     private struct State {
         var endpoint: ModelEndpoint = .chatCompletions
+        var contextWindow: Int?
         var resolvedModels: [String] = []
     }
 
@@ -12,6 +13,15 @@ final class MockModelEndpointResolver: ModelEndpointResolverProtocol, Sendable {
     var endpoint: ModelEndpoint {
         get { mutex.withLock { $0.endpoint } }
         set { mutex.withLock { $0.endpoint = newValue } }
+    }
+
+    var contextWindow: Int? {
+        get { mutex.withLock { $0.contextWindow } }
+        set { mutex.withLock { $0.contextWindow = newValue } }
+    }
+
+    func contextWindowTokenLimit(for modelId: String, credentials: CopilotCredentials) async -> Int? {
+        mutex.withLock { $0.contextWindow }
     }
 
     var resolvedModels: [String] { mutex.withLock { $0.resolvedModels } }

@@ -43,8 +43,9 @@ public struct ConfigurationLoader: ConfigurationLoaderProtocol {
         "mcp"
       ],
       "bodyLimitMiB" : 4,
+      "contextRecencyWindow" : 3,
       "excludedFilePatterns" : [],
-      "maxAgentLoopIterations" : 40,
+      "maxAgentLoopIterations" : 20,
       "mcpServers" : {
         "xcode" : {
           "allowedTools" : [
