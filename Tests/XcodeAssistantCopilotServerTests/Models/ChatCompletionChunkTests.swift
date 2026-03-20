@@ -12,6 +12,8 @@ import Testing
     #expect(chunk.model == "claude-haiku-4.5")  // model is String?
     #expect(chunk.choices.count == 1)
     #expect(chunk.choices[0].delta?.content == "Hello")
+    // "object" is absent in upstream Claude chunks — must default rather than fail decoding.
+    #expect(chunk.object == "chat.completion.chunk")
 }
 
 @Test func chunkDecodesToolCallWithoutArguments() throws {

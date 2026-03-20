@@ -2,6 +2,7 @@ import Foundation
 
 public struct ChatCompletionChunk: Codable, Sendable {
     public let id: String
+    public let object: String
     public let created: Int
     public let model: String?
     public let choices: [ChunkChoice]
@@ -9,20 +10,35 @@ public struct ChatCompletionChunk: Codable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case object
         case created
         case model
         case choices
         case systemFingerprint = "system_fingerprint"
     }
 
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        // "object" is absent from some upstream models (e.g. Claude via /chat/completions).
+        // Default to the only valid value so decoding never fails on its absence.
+        object = try container.decodeIfPresent(String.self, forKey: .object) ?? "chat.completion.chunk"
+        created = try container.decode(Int.self, forKey: .created)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        choices = try container.decode([ChunkChoice].self, forKey: .choices)
+        systemFingerprint = try container.decodeIfPresent(String.self, forKey: .systemFingerprint)
+    }
+
     public init(
         id: String,
+        object: String = "chat.completion.chunk",
         created: Int = ChatCompletionChunk.currentTimestamp(),
         model: String? = nil,
         choices: [ChunkChoice],
         systemFingerprint: String? = nil
     ) {
         self.id = id
+        self.object = object
         self.created = created
         self.model = model
         self.choices = choices

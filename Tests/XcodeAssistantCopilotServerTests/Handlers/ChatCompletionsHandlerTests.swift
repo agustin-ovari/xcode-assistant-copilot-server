@@ -969,6 +969,8 @@ private func consumeAgentStreamBody(_ response: Response) async -> String {
 
     let result = handler.normalizeEventData(input)
 
+    // Fast-exit path: raw string must be returned unchanged (identity, not just equality).
+    #expect(result == input)
     let data = result.data(using: .utf8)!
     let json = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
     #expect(json["object"] as? String == "chat.completion.chunk")
@@ -989,7 +991,8 @@ private func consumeAgentStreamBody(_ response: Response) async -> String {
 
     let result = handler.normalizeEventData(input)
 
-    #expect(result == "[DONE]")
+    // Fast-exit path: [DONE] has no "object" and no "tool_calls" — must be returned as-is.
+    #expect(result == input)
 }
 
 @Test func normalizeEventDataPreservesAllExistingFields() {
@@ -1063,16 +1066,123 @@ private func consumeAgentStreamBody(_ response: Response) async -> String {
 
 @Test func normalizeEventDataDoesNotModifyChunksWithoutToolCalls() {
     let handler = makeHandler()
+    // This input has no "object" key and no "tool_calls" — but wait, we need
+    // to distinguish the two sub-cases: here "gpt-4" has no "object" (Claude-style),
+    // so it goes through the string-injection fast path. Verify the result is valid
+    // JSON with the injected field and the original content intact.
     let input = #"{"choices":[{"index":0,"delta":{"content":"Hello","role":"assistant"}}],"created":1234567890,"id":"msg_003","model":"gpt-4"}"#
 
     let result = handler.normalizeEventData(input)
 
     let data = result.data(using: .utf8)!
     let json = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+    #expect(json["object"] as? String == "chat.completion.chunk")
     let choice = (json["choices"] as! [[String: Any]])[0]
     let delta = choice["delta"] as! [String: Any]
     #expect(delta["content"] as? String == "Hello")
     #expect(delta["tool_calls"] == nil)
+}
+
+// MARK: - Fast-path behaviour tests
+
+@Test func normalizeEventDataFastExitWhenObjectPresentAndNoToolCalls() {
+    let handler = makeHandler()
+    // GPT-style chunk: "object" already present, no "tool_calls" → must be returned
+    // as the exact same String instance (fast-exit, no JSON parsing).
+    let input = #"{"id":"chatcmpl-abc","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}"#
+
+    let result = handler.normalizeEventData(input)
+
+    #expect(result == input)
+}
+
+@Test func normalizeEventDataStringInjectionDoesNotParseJSON() {
+    let handler = makeHandler()
+    // Claude-style chunk: missing "object", no "tool_calls" → string-injection path.
+    // The result must start with the injected prefix and the rest of the original JSON.
+    let input = #"{"id":"msg_abc","created":1700000000,"model":"claude-haiku-4.5","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}"#
+
+    let result = handler.normalizeEventData(input)
+
+    #expect(result.hasPrefix(#"{"object":"chat.completion.chunk","#))
+    // The remainder after the injected prefix+comma must equal the original string
+    // body (everything after the opening brace).
+    let expectedTail = String(input.dropFirst()) // drop the leading "{"
+    #expect(result.hasSuffix(expectedTail))
+    // Must be valid JSON with the field present.
+    let data = result.data(using: .utf8)!
+    let json = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+    #expect(json["object"] as? String == "chat.completion.chunk")
+    #expect(json["id"] as? String == "msg_abc")
+}
+
+@Test func normalizeEventDataStringInjectionPreservesAllOriginalFields() {
+    let handler = makeHandler()
+    let input = #"{"choices":[{"index":0,"delta":{"content":"Hello","role":"assistant"}}],"created":1772507025,"id":"msg_abc","model":"claude-haiku-4.5"}"#
+
+    let result = handler.normalizeEventData(input)
+
+    // String-injection path must produce valid JSON with every original field intact.
+    let data = result.data(using: .utf8)!
+    let json = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+    #expect(json["object"] as? String == "chat.completion.chunk")
+    #expect(json["id"] as? String == "msg_abc")
+    #expect(json["model"] as? String == "claude-haiku-4.5")
+    #expect(json["created"] as? Int == 1772507025)
+    let choice = (json["choices"] as! [[String: Any]])[0]
+    let delta = choice["delta"] as! [String: Any]
+    #expect(delta["content"] as? String == "Hello")
+}
+
+// MARK: - ChatCompletionChunk "object" field encoding
+
+@Test func chatCompletionChunkEncodesObjectField() throws {
+    let chunk = ChatCompletionChunk.makeContentDelta(id: "chatcmpl-test", model: "gpt-4o", content: "hello")
+
+    let encoded = try JSONEncoder().encode(chunk)
+    let json = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+
+    #expect(json["object"] as? String == "chat.completion.chunk")
+}
+
+@Test func chatCompletionChunkDefaultObjectValue() {
+    let chunk = ChatCompletionChunk(
+        id: "chatcmpl-1",
+        choices: [ChunkChoice(delta: ChunkDelta(content: "test"))]
+    )
+    #expect(chunk.object == "chat.completion.chunk")
+}
+
+@Test func chatCompletionChunkCustomObjectValueRoundtrips() throws {
+    let chunk = ChatCompletionChunk(
+        id: "chatcmpl-1",
+        object: "chat.completion.chunk",
+        choices: [ChunkChoice(delta: ChunkDelta(content: "test"))]
+    )
+    let encoded = try JSONEncoder().encode(chunk)
+    let decoded = try JSONDecoder().decode(ChatCompletionChunk.self, from: encoded)
+    #expect(decoded.object == "chat.completion.chunk")
+}
+
+@Test func chatCompletionChunkDecodesObjectFieldFromUpstreamJSON() throws {
+    // Verify that upstream JSON carrying "object" round-trips through the model correctly.
+    let raw = #"{"id":"chatcmpl-xyz","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[]}"#
+    let decoded = try JSONDecoder().decode(ChatCompletionChunk.self, from: raw.data(using: .utf8)!)
+    #expect(decoded.object == "chat.completion.chunk")
+}
+
+@Test func chatCompletionChunkMakeRoleDeltaEncodesObject() throws {
+    let chunk = ChatCompletionChunk.makeRoleDelta(id: "chatcmpl-1", model: "gpt-4o")
+    let encoded = try JSONEncoder().encode(chunk)
+    let json = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+    #expect(json["object"] as? String == "chat.completion.chunk")
+}
+
+@Test func chatCompletionChunkMakeStopDeltaEncodesObject() throws {
+    let chunk = ChatCompletionChunk.makeStopDelta(id: "chatcmpl-1", model: "gpt-4o")
+    let encoded = try JSONEncoder().encode(chunk)
+    let json = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+    #expect(json["object"] as? String == "chat.completion.chunk")
 }
 
 @Test func executeMCPToolRetriesWithResolvedTabIdentifierWhenBridgeReturnsTabError() async throws {

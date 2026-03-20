@@ -588,14 +588,44 @@ public struct ChatCompletionsHandler: Sendable {
         )
     }
 
+    /// Normalizes a raw SSE data string before forwarding it to Xcode.
+    ///   1. Missing "object" field — some upstream models (e.g. Claude via /chat/completions)
+    ///      omit it entirely. Xcode's LSP client requires it on every chunk.
+    ///   2. Missing "arguments" in a tool_calls[n].function object — the first name-
+    ///      announcement delta arrives with only "name" and no "arguments" key, which
+    ///      confuses Xcode's streaming parser. It must be present as "".
     func normalizeEventData(_ data: String) -> String {
+        let needsObject = !data.contains("\"object\"")
+        let hasToolCalls = data.contains("\"tool_calls\"")
+
+        // Fast exit: nothing to patch.
+        if !needsObject && !hasToolCalls {
+            return data
+        }
+
+        // Only the "object" field is missing and there are no tool_calls to inspect. Prepend
+        // the key right after the opening brace so the result is still valid JSON without
+        // any parse/reserialize overhead.
+        if needsObject && !hasToolCalls {
+            guard data.hasPrefix("{") else { return data }
+            return "{\"object\":\"chat.completion.chunk\"," + data.dropFirst()
+        }
+
+        // Full JSON round-trip for tool_calls events (rare — a handful per conversation).
+        // This handles both the "object" and "arguments" patch in one pass.
+        return normalizeEventDataViaJSON(data, injectObject: needsObject)
+    }
+
+    private func normalizeEventDataViaJSON(_ data: String, injectObject: Bool) -> String {
         guard let jsonData = data.data(using: .utf8),
               var json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
             return data
         }
-        if json["object"] == nil {
+
+        if injectObject {
             json["object"] = "chat.completion.chunk"
         }
+
         if let choices = json["choices"] as? [[String: Any]] {
             json["choices"] = choices.map { choice -> [String: Any] in
                 var choice = choice
@@ -615,6 +645,7 @@ public struct ChatCompletionsHandler: Sendable {
                 return choice
             }
         }
+
         guard let normalized = try? JSONSerialization.data(withJSONObject: json),
               let result = String(data: normalized, encoding: .utf8) else {
             return data
