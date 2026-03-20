@@ -167,8 +167,8 @@ struct App: AsyncParsableCommand {
                         }
 
                     case .requiresManualRestart(let reason):
-                        logger.error("Configuration change requires a manual restart: \(reason)")
-                        logger.error("Stopping server. Please restart to apply the new configuration.")
+                        logger.warn("Configuration change requires a manual restart: \(reason)")
+                        logger.warn("Stopping server. Please restart to apply the new configuration.")
                         Darwin.exit(0)
                     }
                 }
