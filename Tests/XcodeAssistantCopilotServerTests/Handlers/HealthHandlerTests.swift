@@ -4,11 +4,15 @@ import Testing
 
 private func makeHandler(
     bridgeHolder: MCPBridgeHolder = MCPBridgeHolder(),
+    authService: AuthServiceProtocol = MockAuthService(),
+    modelFetchCache: ModelFetchCache = ModelFetchCache(),
     logger: LoggerProtocol = MockLogger(),
     startTime: Date = Date()
 ) -> HealthHandler {
     HealthHandler(
         bridgeHolder: bridgeHolder,
+        authService: authService,
+        modelFetchCache: modelFetchCache,
         logger: logger,
         startTime: startTime
     )
@@ -57,8 +61,6 @@ private func makeHandler(
 
     #expect(response.mcpBridge.enabled == true)
 }
-
-
 
 @Test func healthResponseEncodesToExpectedJSON() async throws {
     let startTime = Date().addingTimeInterval(-60)
@@ -113,4 +115,132 @@ private func makeHandler(
 
     let after = await handler.buildHealthResponse()
     #expect(after.mcpBridge.enabled == true)
+}
+
+@Test func healthReportsNotAuthenticatedWhenNoCachedToken() async {
+    let authService = MockAuthService()
+    authService.mockTokenInfo = nil
+    let handler = makeHandler(authService: authService)
+
+    let response = await handler.buildHealthResponse()
+
+    #expect(response.authentication.authenticated == false)
+    #expect(response.authentication.copilotTokenExpiry == nil)
+}
+
+@Test func healthReportsAuthenticatedWhenValidTokenCached() async {
+    let expiresAt = Date().addingTimeInterval(3600)
+    let authService = MockAuthService()
+    authService.mockTokenInfo = CopilotTokenInfo(expiresAt: expiresAt, isAuthenticated: true)
+    let handler = makeHandler(authService: authService)
+
+    let response = await handler.buildHealthResponse()
+
+    #expect(response.authentication.authenticated == true)
+    #expect(response.authentication.copilotTokenExpiry != nil)
+}
+
+@Test func healthReportsNotAuthenticatedWhenExpiredTokenCached() async {
+    let expiresAt = Date().addingTimeInterval(-60)
+    let authService = MockAuthService()
+    authService.mockTokenInfo = CopilotTokenInfo(expiresAt: expiresAt, isAuthenticated: false)
+    let handler = makeHandler(authService: authService)
+
+    let response = await handler.buildHealthResponse()
+
+    #expect(response.authentication.authenticated == false)
+    #expect(response.authentication.copilotTokenExpiry != nil)
+}
+
+@Test func healthTokenExpiryIsISO8601Formatted() async throws {
+    let expiresAt = Date().addingTimeInterval(3600)
+    let authService = MockAuthService()
+    authService.mockTokenInfo = CopilotTokenInfo(expiresAt: expiresAt, isAuthenticated: true)
+    let handler = makeHandler(authService: authService)
+
+    let response = await handler.buildHealthResponse()
+
+    let expiry = try #require(response.authentication.copilotTokenExpiry)
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let parsed = formatter.date(from: expiry)
+    #expect(parsed != nil)
+}
+
+@Test func healthReportsNilLastModelFetchTimeWhenCacheEmpty() async {
+    let handler = makeHandler(modelFetchCache: ModelFetchCache())
+
+    let response = await handler.buildHealthResponse()
+
+    #expect(response.lastModelFetchTime == nil)
+}
+
+@Test func healthReportsLastModelFetchTimeAfterRecordFetch() async throws {
+    let cache = ModelFetchCache()
+    await cache.recordFetch()
+    let handler = makeHandler(modelFetchCache: cache)
+
+    let response = await handler.buildHealthResponse()
+
+    let fetchTime = try #require(response.lastModelFetchTime)
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let parsed = formatter.date(from: fetchTime)
+    #expect(parsed != nil)
+}
+
+@Test func healthLastModelFetchTimeUpdatesOnSubsequentFetches() async throws {
+    let cache = ModelFetchCache()
+    await cache.recordFetch()
+    let handler = makeHandler(modelFetchCache: cache)
+
+    let first = await handler.buildHealthResponse()
+
+    try await Task.sleep(for: .milliseconds(10))
+    await cache.recordFetch()
+
+    let second = await handler.buildHealthResponse()
+
+    let firstTime = try #require(first.lastModelFetchTime)
+    let secondTime = try #require(second.lastModelFetchTime)
+    #expect(firstTime != secondTime)
+}
+
+@Test func healthResponseJSONIncludesAuthenticationFields() async throws {
+    let expiresAt = Date().addingTimeInterval(3600)
+    let authService = MockAuthService()
+    authService.mockTokenInfo = CopilotTokenInfo(expiresAt: expiresAt, isAuthenticated: true)
+    let handler = makeHandler(authService: authService)
+
+    let response = await handler.buildHealthResponse()
+    let data = try JSONEncoder().encode(response)
+    let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+
+    let authentication = try #require(json["authentication"] as? [String: Any])
+    #expect(authentication["authenticated"] as? Bool == true)
+    #expect(authentication["copilot_token_expiry"] as? String != nil)
+}
+
+@Test func healthResponseJSONOmitsLastModelFetchTimeWhenNotFetched() async throws {
+    let handler = makeHandler(modelFetchCache: ModelFetchCache())
+
+    let response = await handler.buildHealthResponse()
+
+    let encoder = JSONEncoder()
+    let data = try encoder.encode(response)
+    let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+
+    #expect(!json.keys.contains("last_model_fetch_time"))
+}
+
+@Test func healthResponseJSONIncludesLastModelFetchTimeAfterFetch() async throws {
+    let cache = ModelFetchCache()
+    await cache.recordFetch()
+    let handler = makeHandler(modelFetchCache: cache)
+
+    let response = await handler.buildHealthResponse()
+    let data = try JSONEncoder().encode(response)
+    let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+
+    #expect(json["last_model_fetch_time"] as? String != nil)
 }

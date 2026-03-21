@@ -5,15 +5,18 @@ import HTTPTypes
 public struct ModelsHandler: Sendable {
     private let authService: AuthServiceProtocol
     private let copilotAPI: CopilotAPIServiceProtocol
+    private let modelFetchCache: ModelFetchCache
     private let logger: LoggerProtocol
 
     public init(
         authService: AuthServiceProtocol,
         copilotAPI: CopilotAPIServiceProtocol,
+        modelFetchCache: ModelFetchCache,
         logger: LoggerProtocol
     ) {
         self.authService = authService
         self.copilotAPI = copilotAPI
+        self.modelFetchCache = modelFetchCache
         self.logger = logger
     }
 
@@ -43,6 +46,8 @@ public struct ModelsHandler: Sendable {
                 message: "Failed to list models"
             )
         }
+
+        await modelFetchCache.recordFetch()
 
         let usableModels = models.filter { $0.isUsableForChat }
         logger.debug("Filtered \(models.count) model(s) to \(usableModels.count) chat-usable model(s)")

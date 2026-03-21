@@ -12,6 +12,7 @@ final class MockAuthService: AuthServiceProtocol, Sendable {
         var shouldThrow: Error?
         var invalidateCallCount: Int = 0
         var getValidCopilotTokenCallCount: Int = 0
+        var mockTokenInfo: CopilotTokenInfo?
     }
 
     private let mutex = Mutex(State())
@@ -39,6 +40,11 @@ final class MockAuthService: AuthServiceProtocol, Sendable {
     var invalidateCallCount: Int { mutex.withLock { $0.invalidateCallCount } }
     var getValidCopilotTokenCallCount: Int { mutex.withLock { $0.getValidCopilotTokenCallCount } }
 
+    var mockTokenInfo: CopilotTokenInfo? {
+        get { mutex.withLock { $0.mockTokenInfo } }
+        set { mutex.withLock { $0.mockTokenInfo = newValue } }
+    }
+
     func getGitHubToken() async throws -> String {
         if let error = mutex.withLock({ $0.shouldThrow }) { throw error }
         return mutex.withLock { $0.token }
@@ -58,5 +64,9 @@ final class MockAuthService: AuthServiceProtocol, Sendable {
 
     func invalidateCachedToken() async {
         mutex.withLock { $0.invalidateCallCount += 1 }
+    }
+
+    func cachedTokenInfo() async -> CopilotTokenInfo? {
+        mutex.withLock { $0.mockTokenInfo }
     }
 }

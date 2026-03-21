@@ -37,6 +37,7 @@ public protocol AuthServiceProtocol: Sendable {
     func getGitHubToken() async throws -> String
     func getValidCopilotToken() async throws -> CopilotCredentials
     func invalidateCachedToken() async
+    func cachedTokenInfo() async -> CopilotTokenInfo?
 }
 
 extension AuthServiceProtocol {
@@ -115,6 +116,11 @@ public actor GitHubCLIAuthService: AuthServiceProtocol {
     public func invalidateCachedToken() {
         cachedToken = nil
         logger.debug("Cached Copilot token invalidated")
+    }
+
+    public func cachedTokenInfo() -> CopilotTokenInfo? {
+        guard let token = cachedToken else { return nil }
+        return CopilotTokenInfo(expiresAt: token.expiresAt, isAuthenticated: token.isValid)
     }
 
     private func resolveGitHubToken() async throws -> String? {

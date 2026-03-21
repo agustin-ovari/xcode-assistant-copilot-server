@@ -28,14 +28,19 @@ public struct CopilotServer: Sendable {
     }
 
     public func run() async throws {
+        let modelFetchCache = ModelFetchCache()
+
         let healthHandler = HealthHandler(
             bridgeHolder: bridgeHolder,
+            authService: authService,
+            modelFetchCache: modelFetchCache,
             logger: logger
         )
 
         let modelsHandler = ModelsHandler(
             authService: authService,
             copilotAPI: copilotAPI,
+            modelFetchCache: modelFetchCache,
             logger: logger
         )
 

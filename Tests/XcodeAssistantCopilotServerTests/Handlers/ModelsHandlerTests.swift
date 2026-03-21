@@ -9,11 +9,13 @@ import Testing
 private func makeModelsHandler(
     authService: AuthServiceProtocol = MockAuthService(),
     copilotAPI: CopilotAPIServiceProtocol = MockCopilotAPIService(),
+    modelFetchCache: ModelFetchCache = ModelFetchCache(),
     logger: LoggerProtocol = MockLogger()
 ) -> ModelsHandler {
     ModelsHandler(
         authService: authService,
         copilotAPI: copilotAPI,
+        modelFetchCache: modelFetchCache,
         logger: logger
     )
 }
@@ -213,6 +215,67 @@ private func drainResponseBody(_ response: Response) async throws -> Data {
     let modelsResponse = try JSONDecoder().decode(ModelsResponse.self, from: data)
     #expect(modelsResponse.data.count == 1)
     #expect(modelsResponse.data[0].id == "visible-model")
+}
+
+@Test func modelFetchCacheIsRecordedAfterSuccessfulFetch() async {
+    let copilotAPI = MockCopilotAPIService()
+    copilotAPI.models = [CopilotModel(id: "gpt-4", capabilities: CopilotModelCapabilities(type: "chat"))]
+    let cache = ModelFetchCache()
+    let handler = makeModelsHandler(copilotAPI: copilotAPI, modelFetchCache: cache)
+
+    let beforeFetch = await cache.lastFetchTime
+    #expect(beforeFetch == nil)
+
+    _ = await handler.buildModelsResponse(credentials: makeCredentials())
+
+    let afterFetch = await cache.lastFetchTime
+    #expect(afterFetch != nil)
+}
+
+@Test func modelFetchCacheIsNotRecordedWhenFetchFails() async {
+    let copilotAPI = MockCopilotAPIService()
+    copilotAPI.listModelsResults = [
+        .failure(CopilotAPIError.unauthorized),
+        .failure(CopilotAPIError.unauthorized)
+    ]
+    let cache = ModelFetchCache()
+    let handler = makeModelsHandler(copilotAPI: copilotAPI, modelFetchCache: cache)
+
+    _ = await handler.buildModelsResponse(credentials: makeCredentials())
+
+    let lastFetchTime = await cache.lastFetchTime
+    #expect(lastFetchTime == nil)
+}
+
+@Test func modelFetchCacheIsNotRecordedWhenAuthFails() async {
+    let authService = MockAuthService()
+    authService.shouldThrow = AuthServiceError.notAuthenticated
+    let cache = ModelFetchCache()
+    let handler = makeModelsHandler(authService: authService, modelFetchCache: cache)
+
+    _ = try? await handler.handle()
+
+    let lastFetchTime = await cache.lastFetchTime
+    #expect(lastFetchTime == nil)
+}
+
+@Test func modelFetchCacheUpdatesOnEachSuccessfulFetch() async throws {
+    let copilotAPI = MockCopilotAPIService()
+    copilotAPI.models = [CopilotModel(id: "gpt-4", capabilities: CopilotModelCapabilities(type: "chat"))]
+    let cache = ModelFetchCache()
+    let handler = makeModelsHandler(copilotAPI: copilotAPI, modelFetchCache: cache)
+
+    _ = await handler.buildModelsResponse(credentials: makeCredentials())
+    let firstTime = await cache.lastFetchTime
+
+    try await Task.sleep(for: .milliseconds(10))
+
+    _ = await handler.buildModelsResponse(credentials: makeCredentials())
+    let secondTime = await cache.lastFetchTime
+
+    let first = try #require(firstTime)
+    let second = try #require(secondTime)
+    #expect(second > first)
 }
 
 @Test func modelsFiltersOutModelsWithNonEnabledPolicy() async throws {
