@@ -212,6 +212,10 @@ public struct CopilotModelsResponse: Decodable, Sendable {
         while !arrayContainer.isAtEnd {
             if let model = try? arrayContainer.decode(CopilotModel.self) {
                 result.append(model)
+            } else {
+                // When decode fails, UnkeyedDecodingContainer does not advance past the element.
+                // Decode as JSONValue to skip it, otherwise the loop spins forever.
+                _ = try? arrayContainer.decode(JSONValue.self)
             }
         }
         return result

@@ -235,3 +235,36 @@ import Foundation
     #expect(stderrLines.first == "err_1")
     #expect(stderrLines.last == "err_\(lineCount)")
 }
+
+@Test func processRunnerTerminatesProcessOnTaskCancellation() async throws {
+    let runner = ProcessRunner()
+
+    let task = Task<Void, Error> {
+        _ = try await runner.run(executablePath: "/bin/sleep", arguments: ["60"])
+    }
+
+    try await Task.sleep(for: .milliseconds(100))
+    task.cancel()
+
+    let completedPromptly = await withTaskGroup(of: Bool.self) { group in
+        group.addTask {
+            _ = try? await task.value
+            return true
+        }
+        group.addTask {
+            try? await Task.sleep(for: .seconds(3))
+            return false
+        }
+        let result = await group.next() ?? false
+        group.cancelAll()
+        return result
+    }
+
+    #expect(completedPromptly, "Expected process to be terminated within 3 seconds after task cancellation")
+
+    if case .failure(let error) = await task.result {
+        #expect(error is CancellationError, "Expected CancellationError but got \(error)")
+    } else {
+        Issue.record("Expected run to throw CancellationError after task cancellation")
+    }
+}

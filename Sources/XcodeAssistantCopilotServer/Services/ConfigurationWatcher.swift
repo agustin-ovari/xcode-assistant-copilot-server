@@ -29,12 +29,13 @@ public actor ConfigurationWatcher: ConfigurationWatcherProtocol {
     }
 
     public func changes() -> AsyncStream<ServerConfiguration> {
-        let stream = AsyncStream<ServerConfiguration> { continuation in
-            self.continuation = continuation
-            continuation.onTermination = { [weak self] _ in
-                guard let self else { return }
-                Task { await self.stop() }
-            }
+        continuation?.onTermination = nil
+        continuation?.finish()
+        let (stream, cont) = AsyncStream<ServerConfiguration>.makeStream()
+        self.continuation = cont
+        cont.onTermination = { [weak self] _ in
+            guard let self else { return }
+            Task { await self.stop() }
         }
         return stream
     }

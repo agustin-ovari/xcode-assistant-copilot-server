@@ -137,3 +137,39 @@ import Foundation
     let result = String(data: collected, encoding: .utf8)
     #expect(result == jsonMessages.joined())
 }
+
+@Test func asyncDataStreamUsesCustomBufferingPolicy() async {
+    let pipe = Pipe()
+    let stream = pipe.fileHandleForReading.asyncDataStream(bufferingPolicy: .bufferingOldest(100))
+
+    let message = "hello buffered world"
+    Task {
+        pipe.fileHandleForWriting.write(Data(message.utf8))
+        pipe.fileHandleForWriting.closeFile()
+    }
+
+    var collected = Data()
+    for await data in stream {
+        collected.append(data)
+    }
+
+    #expect(String(data: collected, encoding: .utf8) == message)
+}
+
+@Test func asyncDataStreamDefaultPolicyIsUnbounded() async {
+    let pipe = Pipe()
+    let stream = pipe.fileHandleForReading.asyncDataStream()
+
+    let largeMessage = String(repeating: "X", count: 50_000)
+    Task {
+        pipe.fileHandleForWriting.write(Data(largeMessage.utf8))
+        pipe.fileHandleForWriting.closeFile()
+    }
+
+    var collected = Data()
+    for await data in stream {
+        collected.append(data)
+    }
+
+    #expect(collected.count == largeMessage.utf8.count)
+}

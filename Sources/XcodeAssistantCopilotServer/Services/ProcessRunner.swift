@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 public struct ProcessResult: Sendable {
     public let stdout: String
@@ -27,6 +26,13 @@ extension ProcessRunnerProtocol {
 
 public enum ProcessRunnerError: Error, CustomStringConvertible {
     case executableNotFound(String)
+
+    /// Represents a process that exited with a non-zero status code.
+    ///
+    /// `ProcessRunner.run` never throws this case — it always returns a `ProcessResult`
+    /// regardless of the exit code. Callers that want to treat failure exit codes as
+    /// errors should inspect `ProcessResult.succeeded` or `ProcessResult.exitCode`
+    /// and throw this case themselves when appropriate.
     case executionFailed(exitCode: Int32, stderr: String)
 
     public var description: String {
@@ -47,89 +53,60 @@ public final class ProcessRunner: ProcessRunnerProtocol {
         arguments: [String],
         environment: [String: String]? = nil
     ) async throws -> ProcessResult {
-        try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            let stdoutPipe = Pipe()
-            let stderrPipe = Pipe()
+        let process = Process()
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
 
-            process.executableURL = URL(fileURLWithPath: executablePath)
-            process.arguments = arguments
-            process.standardOutput = stdoutPipe
-            process.standardError = stderrPipe
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = arguments
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
 
-            if let environment {
-                process.environment = environment
-            }
+        if let environment {
+            process.environment = environment
+        }
 
-            let state = Mutex(PipeCollectionState())
+        // Arm the readabilityHandlers before the process launches so that
+        // no output is missed and the OS pipe buffer never fills up.
+        let stdoutStream = stdoutPipe.fileHandleForReading.asyncDataStream()
+        let stderrStream = stderrPipe.fileHandleForReading.asyncDataStream()
 
-            let resumeIfComplete: @Sendable (Process) -> Void = { process in
-                let snapshot = state.withLock { s -> PipeCollectionState? in
-                    guard s.stdoutDone && s.stderrDone && s.processTerminated && !s.resumed else {
-                        return nil
-                    }
-                    s.resumed = true
-                    return s
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+
+            let exitCode: Int32 = try await withCheckedThrowingContinuation { continuation in
+                process.terminationHandler = { terminatedProcess in
+                    continuation.resume(returning: terminatedProcess.terminationStatus)
                 }
-
-                guard let snapshot else { return }
-
-                let stdout = String(data: snapshot.stdoutData, encoding: .utf8) ?? ""
-                let stderr = String(data: snapshot.stderrData, encoding: .utf8) ?? ""
-
-                let result = ProcessResult(
-                    stdout: stdout.trimmingCharacters(in: .whitespacesAndNewlines),
-                    stderr: stderr.trimmingCharacters(in: .whitespacesAndNewlines),
-                    exitCode: process.terminationStatus
-                )
-                continuation.resume(returning: result)
-            }
-
-            stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-                let data = handle.availableData
-                if data.isEmpty {
-                    handle.readabilityHandler = nil
-                    state.withLock { $0.stdoutDone = true }
-                    resumeIfComplete(process)
-                } else {
-                    state.withLock { $0.stdoutData.append(data) }
+                do {
+                    try process.run()
+                } catch {
+                    process.terminationHandler = nil
+                    continuation.resume(throwing: ProcessRunnerError.executableNotFound(executablePath))
                 }
             }
 
-            stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-                let data = handle.availableData
-                if data.isEmpty {
-                    handle.readabilityHandler = nil
-                    state.withLock { $0.stderrDone = true }
-                    resumeIfComplete(process)
-                } else {
-                    state.withLock { $0.stderrData.append(data) }
-                }
-            }
+            try Task.checkCancellation()
 
-            process.terminationHandler = { terminatedProcess in
-                state.withLock { $0.processTerminated = true }
-                resumeIfComplete(terminatedProcess)
-            }
+            async let stdoutData = collectData(from: stdoutStream)
+            async let stderrData = collectData(from: stderrStream)
+            let (out, err) = await (stdoutData, stderrData)
 
-            do {
-                try process.run()
-            } catch {
-                stdoutPipe.fileHandleForReading.readabilityHandler = nil
-                stderrPipe.fileHandleForReading.readabilityHandler = nil
-                process.terminationHandler = nil
-                state.withLock { $0.resumed = true }
-                continuation.resume(throwing: ProcessRunnerError.executableNotFound(executablePath))
-            }
+            return ProcessResult(
+                stdout: String(data: out, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+                stderr: String(data: err, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+                exitCode: exitCode
+            )
+        } onCancel: {
+            process.terminate()
         }
     }
-}
 
-private struct PipeCollectionState {
-    var stdoutData = Data()
-    var stderrData = Data()
-    var stdoutDone = false
-    var stderrDone = false
-    var processTerminated = false
-    var resumed = false
+    private func collectData(from stream: AsyncStream<Data>) async -> Data {
+        var result = Data()
+        for await chunk in stream {
+            result.append(chunk)
+        }
+        return result
+    }
 }
