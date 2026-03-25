@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:xcode-assistant-copilot-server}",
+            "name": "Debug xcode-assistant-copilot-server",
+            "target": "xcode-assistant-copilot-server",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug xcode-assistant-copilot-server"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:xcode-assistant-copilot-server}",
+            "name": "Release xcode-assistant-copilot-server",
+            "target": "xcode-assistant-copilot-server",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release xcode-assistant-copilot-server"
+        }
+    ]
+}

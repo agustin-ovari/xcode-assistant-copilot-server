@@ -10,7 +10,7 @@ public actor MCPSSEBridgeService: MCPBridgeServiceProtocol {
 
     private var messagesEndpointURL: String?
     private var endpointDiscoveryContinuation: CheckedContinuation<String, Error>?
-    private var pendingRequests: [Int: CheckedContinuation<MCPResponse, Error>] = [:]
+    private var pendingRequests: [JSONRPCId: CheckedContinuation<MCPResponse, Error>] = [:]
     private var cachedTools: [MCPTool]?
     private var sseTask: Task<Void, Never>?
     private var nextRequestId: Int = 1
@@ -199,7 +199,7 @@ public actor MCPSSEBridgeService: MCPBridgeServiceProtocol {
         }
     }
 
-    private func failPendingRequest(id: Int, error: Error) {
+    private func failPendingRequest(id: JSONRPCId, error: Error) {
         guard let continuation = pendingRequests.removeValue(forKey: id) else { return }
         continuation.resume(
             throwing: MCPBridgeError.communicationFailed(
@@ -226,13 +226,14 @@ public actor MCPSSEBridgeService: MCPBridgeServiceProtocol {
             requestData: requestData,
             extraHeaders: serverConfig.headers ?? [:]
         )
+        let requestKey = JSONRPCId.int(requestId)
         return try await withCheckedThrowingContinuation { continuation in
-            pendingRequests[requestId] = continuation
+            pendingRequests[requestKey] = continuation
             Task {
                 do {
                     _ = try await self.httpClient.execute(endpoint)
                 } catch {
-                    self.failPendingRequest(id: requestId, error: error)
+                    self.failPendingRequest(id: requestKey, error: error)
                 }
             }
         }

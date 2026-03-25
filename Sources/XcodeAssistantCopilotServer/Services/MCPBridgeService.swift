@@ -51,7 +51,7 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
     private var stdinPipe: Pipe?
     private var stdoutPipe: Pipe?
     private var nextRequestId: Int = 1
-    private var pendingRequests: [Int: CheckedContinuation<MCPResponse, Error>] = [:]
+    private var pendingRequests: [JSONRPCId: CheckedContinuation<MCPResponse, Error>] = [:]
     private var cachedTools: [MCPTool]?
     private var readTask: Task<Void, Never>?
     private var stderrReadTask: Task<Void, Never>?
@@ -270,11 +270,12 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
             throw MCPBridgeError.communicationFailed("Failed to encode request: \(error.localizedDescription)")
         }
 
+        let requestKey = JSONRPCId.int(requestId)
         return try await withCheckedThrowingContinuation { continuation in
-            pendingRequests[requestId] = continuation
+            pendingRequests[requestKey] = continuation
 
             guard var messageData = String(data: data, encoding: .utf8) else {
-                pendingRequests.removeValue(forKey: requestId)
+                pendingRequests.removeValue(forKey: requestKey)
                 continuation.resume(throwing: MCPBridgeError.communicationFailed("Failed to create message string"))
                 return
             }
@@ -282,7 +283,7 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
             messageData += "\n"
 
             guard let writeData = messageData.data(using: .utf8) else {
-                pendingRequests.removeValue(forKey: requestId)
+                pendingRequests.removeValue(forKey: requestKey)
                 continuation.resume(throwing: MCPBridgeError.communicationFailed("Failed to encode message"))
                 return
             }
