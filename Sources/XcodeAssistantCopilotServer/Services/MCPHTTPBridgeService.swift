@@ -108,9 +108,11 @@ public actor MCPHTTPBridgeService: MCPBridgeServiceProtocol {
         let requestId = nextRequestId
         nextRequestId += 1
         let request = MCPRequest(id: requestId, method: method, params: params)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .withoutEscapingSlashes
         let requestData: Data
         do {
-            requestData = try JSONEncoder().encode(request)
+            requestData = try encoder.encode(request)
         } catch {
             throw MCPBridgeError.communicationFailed("Failed to encode request: \(error.localizedDescription)")
         }
@@ -166,9 +168,11 @@ public actor MCPHTTPBridgeService: MCPBridgeServiceProtocol {
     private func sendNotification(method: String, params: [String: JSONValue]? = nil) async throws {
         guard let urlString = serverConfig.url else { return }
         let notification = MCPNotification(method: method, params: params)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .withoutEscapingSlashes
         let notificationData: Data
         do {
-            notificationData = try JSONEncoder().encode(notification)
+            notificationData = try encoder.encode(notification)
         } catch {
             throw MCPBridgeError.communicationFailed("Failed to encode notification: \(error.localizedDescription)")
         }

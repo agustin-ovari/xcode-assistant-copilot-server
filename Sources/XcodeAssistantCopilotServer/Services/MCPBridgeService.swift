@@ -263,9 +263,11 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
 
         let request = MCPRequest(id: requestId, method: method, params: params)
 
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .withoutEscapingSlashes
         let data: Data
         do {
-            data = try JSONEncoder().encode(request)
+            data = try encoder.encode(request)
         } catch {
             throw MCPBridgeError.communicationFailed("Failed to encode request: \(error.localizedDescription)")
         }
@@ -303,9 +305,11 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
 
         let notification = MCPNotification(method: method, params: params)
 
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .withoutEscapingSlashes
         let data: Data
         do {
-            data = try JSONEncoder().encode(notification)
+            data = try encoder.encode(notification)
         } catch {
             throw MCPBridgeError.communicationFailed(
                 "Failed to encode notification: \(error.localizedDescription)"
@@ -371,6 +375,11 @@ public actor MCPBridgeService: MCPBridgeServiceProtocol {
     }
 
     private func processLine(_ line: String) {
+        guard line.hasPrefix("{") else {
+            logger.debug("MCP bridge: skipping non-JSON line: \(line.prefix(80))")
+            return
+        }
+
         guard let data = line.data(using: .utf8) else {
             logger.warn("MCP bridge: failed to convert line to data")
             return
